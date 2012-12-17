@@ -1,0 +1,7 @@
+<project name="async" url="https://github.com/stroncium/hx-async" license="GPL">
+  <user name="stroncium"/>
+  <tag v="async"/>
+  <tag v="crossplatform"/>
+  <description>Asynchronous programming made easy.</description>
+  <version name="1.0">Initial release, everything is working correctly.</version>
+</project>
