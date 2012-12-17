@@ -12,9 +12,9 @@ class Macro{
     return switch(t){
       case TPath( p ): dumpTypePath(p);
       case TFunction( args, ret): args.map(dumpType).join('->')+'->'+dumpType(ret);
-      case TAnonymous( fields ): '{...}';
+      case TAnonymous(_): '{...}';
       case TParent( t ): '('+dumpType(t)+')';
-      case TExtend( p , fields ): '{...}';
+      case TExtend( _ , _ ): '{...}';
       case TOptional( t ): 'Null<'+dumpType(t)+'>';
     }
   }
@@ -118,9 +118,15 @@ class Macro{
     if(e.pos == null) return '### NO POS ###';
     var expr = e.expr;
     switch(expr){
-      case EMeta(_): throw 'error';
+      case EType(_,_): throw 'type'; return null;
+      case EMeta(_): throw 'error'; return null;
       case EWhile(cond, expr, normal):
-        return 'while( '+dumpExpr(cond)+' ) '+dumpExpr(expr);
+        if(normal){
+          return 'while( '+dumpExpr(cond)+' ) '+dumpExpr(expr);
+        }
+        else{
+          return 'do '+dumpExpr(expr)+' while( '+dumpExpr(cond)+' )';
+        }
       case EVars(vars):
         return
           'var '+vars.map(function(v){
@@ -148,7 +154,8 @@ class Macro{
       case ETernary(econd,eif,eelse):
         return dumpExpr(econd)+' ? '+dumpExpr(eif)+' : '+dumpExpr(eelse);
       //~ case ESwitch(e : Expr,cases : Array<{ values : Array<Expr>, expr : Expr }>,edef : Null<Expr>):
-      case ESwitch(e,cases,edef):
+      //~ case ESwitch(e,cases,edef):
+      case ESwitch(_,_,_):
         throw 'switch';
         return null;
       case EReturn(e):
@@ -156,7 +163,8 @@ class Macro{
       case EParenthesis(e):
         return '('+dumpExpr(e)+')';
       //~ case EObjectDecl(fields : Array<{ field : String, expr : Expr }>)
-      case EObjectDecl(fields):
+      //~ case EObjectDecl(fields):
+      case EObjectDecl(_):
         //~ throw 'object';
         return '{...}';
       case ENew(t,params):
@@ -181,15 +189,15 @@ class Macro{
       case EField(e,field):
         return dumpExpr(e)+'.'+field;
       //~ case EDisplayNew(t : TypePath)
-      case EDisplayNew(t): throw 'displaynew'; return null;
+      case EDisplayNew(_): throw 'displaynew'; return null;
       //~ case EDisplay(e : Expr,isCall : Bool)
-      case EDisplay(e,isCall): throw 'display'; return null;
+      case EDisplay(_,_): throw 'display'; return null;
       case EContinue:
         return 'continue';
       case EConst(c):
         return dumpConst(c);
       //~ case ECheckType(e : Expr,t : ComplexType)
-      case ECheckType(e,t): throw 'checktype'; return null;
+      case ECheckType(_,_): throw 'checktype'; return null;
       case ECast(e,t):
         return t == null ?
           'cast('+dumpExpr(e)+')':
@@ -212,7 +220,7 @@ class Macro{
       case EBinop(op, e1, e2): return dumpBinop(op, e1, e2);
       case EArrayDecl(values): return '['+values.map(dumpExpr).join(', ')+']';
       //~ case EArray(e1 : Expr,e2 : Expr)
-      case EArray(e1,e2):
+      case EArray(_,_):
         throw 'array';
         return null;
 

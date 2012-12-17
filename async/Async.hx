@@ -23,7 +23,8 @@ class Async{
   @:macro
   public static function it(e:Expr):Dynamic{
     switch(e.expr){
-      case EFunction(name, data):
+      //~ case EFunction(name, data):
+      case EFunction(_, data):
         var cbArg = data.args[data.args.length - 1];
         data.expr = syncToAsync(cbArg, data.expr);
       default:
@@ -35,7 +36,7 @@ class Async{
 
   #if macro //
   static inline var ASYNC_CALL_FUN = 'async';
-  static inline var ASYNC_RAW_FUN = 'asyncRaw';
+  static inline var ASYNC_RAW_FUN = 'asyncr';
   static inline var ASYNC_PASSTHROUGH_FUN = 'asyncPassthrough';
   static inline var LOOP_FUN = 'loop';
   static inline var AFTER_LOOP_FUN = 'afterLoop';
@@ -212,7 +213,8 @@ class Async{
             if(id == ASYNC_CALL_FUN && args.length != 0){
               var realFunc = extractRealFunc(args);
               switch(realFunc.expr){
-                case ECall(func, callArgs): processAsyncCall(realFunc, callArgs, args);
+                //~ case ECall(func, callArgs): processAsyncCall(realFunc, callArgs, args);
+                case ECall(_, callArgs): processAsyncCall(realFunc, callArgs, args);
                 default: throw 'not a function call';
               }
             }
@@ -227,7 +229,8 @@ class Async{
               //~ trace('async sure');
               var realFunc = extractRealFunc(args);
               switch(realFunc.expr){
-                case ECall(func, callArgs): processAsyncRawCall(realFunc, callArgs, args);
+                //~ case ECall(func, callArgs): processAsyncRawCall(realFunc, callArgs, args);
+                case ECall(_, callArgs): processAsyncRawCall(realFunc, callArgs, args);
                 default: throw 'not a function call';
               }
             }
@@ -426,7 +429,7 @@ class Async{
     if(cbArg.type != null){
       addEbArgs = [];
       switch(cbArg.type){
-        case TFunction(args, ret):
+        case TFunction(args, _):
           var first = true;
           for(arg in args){
             if(first) first = false;
@@ -503,25 +506,19 @@ class Async{
     for(f in buildFields){
       switch(f.kind){
         case FFun(fun):
-          for(m in f.meta){
+          var toDel = -1;
+          for(i in 0...f.meta.length){
+            var m = f.meta[i];
             switch(m.name){
               case 'async':
-                //~ var cbArg = fun.args[fun.args.length - 1];
-                //~ fun.expr = syncToAsync(cbArg, fun.expr);
-                //~ break;
-
-                //~ trace(fun.expr.dump());
-                //~ trace('converting');
                 convertClassFunction(fun, true);
-                //~ trace('\n'+fun.expr.dump());
-                //~ fun.expr = fun.expr;
-                //~ fun.expr = EBlock([]).pos(fun.expr.pos);
+                toDel = i;
                 break;
-              //~ case 'asyncWhole':
-                //~ convertClassFunction(fun, true);
-                //~ break;
               default:
             }
+          }
+          if(toDel != -1){
+            f.meta.splice(toDel, 1);
           }
         default:
       }
