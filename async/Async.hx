@@ -72,12 +72,7 @@ class Async{
   static inline function replaceExpressionsWithCalls(arr:Array<{a:Array<Expr>, p:Int}>, ident:ExprDef){
     for(acc in arr){
       var pos = acc.get().pos;
-      //~ trace('replacing break at '+pos);
-      //~ trace(acc.a);
-      //~ trace('was '+acc.get());
       acc.set(ident.pos(pos).call([]).pos(pos));
-      //~ trace(acc.a);
-      //~ trace('now '+acc.get().dump());
     }
   }
 
@@ -211,11 +206,34 @@ class Async{
           case ECall(func, args):{
             var id = func.extractIdent();
             if(id == ASYNC_CALL_FUN && args.length != 0){
-              var realFunc = extractRealFunc(args);
-              switch(realFunc.expr){
-                //~ case ECall(func, callArgs): processAsyncCall(realFunc, callArgs, args);
-                case ECall(_, callArgs): processAsyncCall(realFunc, callArgs, args);
-                default: throw 'not a function call';
+              var parallel = [];
+              var ids = [];
+              for(arg in args){
+                switch(arg.expr){
+                  case EBinop(op, left, right):
+                    switch(op){
+                      case OpLte:
+                        ids.push(left);
+                        parallel.push({ids:ids, fun:right});
+                        ids = [];
+                      default:
+                        throw 'unknown shit(bad op)';
+                    }
+                  case ECall(_,_):
+                    parallel.push({ids:[], fun:arg});
+                    ids = [];
+                  case EConst(_):
+                    ids.push(arg);
+                  default:
+                    throw 'error';
+                }
+              }
+              for(par in parallel){
+                switch(par.fun.expr){
+                  //~ case ECall(func, callArgs): processAsyncCall(realFunc, callArgs, args);
+                  case ECall(_, callArgs): processAsyncCall(par.fun, callArgs, par.ids);
+                  default: throw 'not a function call';
+                }
               }
             }
             else if(id == ASYNC_PASSTHROUGH_FUN){
@@ -502,29 +520,45 @@ class Async{
   }
 
   public static function buildClass(){
+    log('building async class');
     var buildFields = Context.getBuildFields();
+    log('total fields: '+buildFields.length);
+    try{
     for(f in buildFields){
       switch(f.kind){
         case FFun(fun):
-          var toDel = -1;
+          log('found function '+f.name);
+          var asyncAt = -1;
+          log('meta: '+f.meta);
           for(i in 0...f.meta.length){
             var m = f.meta[i];
             switch(m.name){
-              case 'async':
-                convertClassFunction(fun, true);
-                toDel = i;
-                break;
+              case 'async': asyncAt = i; break;
               default:
             }
           }
-          if(toDel != -1){
-            f.meta.splice(toDel, 1);
+          if(asyncAt != -1){
+            log('building async function '+f.name);
+            convertClassFunction(fun, true);
+            f.meta.splice(asyncAt, 1);
+          }
+          else{
+            log('skipping');
           }
         default:
+          //~ log('skipping field '+f.name);
       }
     }
+    }
+    catch(e:Dynamic){trace('Error building async class: '+e);}
     //~ trace(buildFields);
     return buildFields;
+  }
+
+  static inline function log(str:String){
+    #if async_log //
+      neko.Lib.println(str);
+    #end
   }
   #end
 }

@@ -20,26 +20,25 @@ The library isn't currently released on haxelib.
 
   + Converting is rebuilding seemingly synchronous code to asynchronous.
 
-  + Every class implementing **async.Build** interface will be automatically processed.
-    Which means every function of such class with **@async** metadata will be converted.
+  + Every class implementing **async.Build** interface will be automatically processed, which means every function of such class with **@async** metadata will be converted.
 
   + Function can be implicitly converted by passing is to **async.Async.it()** macro.
 
   + Along the code convertion, the following will be processed and converted to asynchronous:
     - **async(<arguments>)** calls - the main construct
 
-      There are 2 forms of async call currently:
-        + `async(someFunction(<arg list>))`
+      It accepts a comma-separated list of aynchronous calls. Each asynchronous call have form of
+        `<comma-separated list of identifiers> <= <function>(<arguments without callback>))`
+        or
+        `<function>(<arguments without callback>)` for functions which return pass only null/error to it's callback.
 
-          is used for calling asynchronous functions which pass only null/error to it's callback.
+      Stripping the code related to handling errors,
 
-          Stripping the details, `async(getA(1, 2, 3)); /*some code*/` will be converted to (something like) `getA(1, 2, 3, function(error){ /*some code*/ })`.
+      `async(getA(1, 2, 3)); /*some code*/` will be converted to (something like) `getA(1, 2, 3, function(error){ /*some code*/ })`.
 
-        + `async(<id list> <= someFunction(<arg list>))`
+      `async(a <= getA()); /*some code*/` will be converted to (something like) `getA(function(error, a){ /*some code*/ })`.
 
-          is used for calling asynchronous functions which pass some other info to callback
-
-          Stripping the details, `async(a <= getA()); /*some code*/` will be converted to (something like) `getA(function(error, a){ /*some code*/ })`.
+      `async(a <= getA(), getB)()); /*some code*/` will be converted to (something like) `getA(function(error, a){ getB(function(error){/*some code*/ }); };`.
 
       Any error got from asynchronous functions called will be passed to main function callback.
 
@@ -50,6 +49,8 @@ The library isn't currently released on haxelib.
       The condition should be fully synchronous(in it's context)
       The expression is processed the same way as whole function.
       If expression doesn't contain any parts which need conversion, the code is left as is.
+
+      **continue** and **break** expressions will be processed and exactly what you expect them to do.
 
     - **if** conditions
 
@@ -66,7 +67,7 @@ The library isn't currently released on haxelib.
   + **Mission control**: if there is no return in your code - it will be implicitly added.
 
     All in all, there is no way @async function will never call it's callback or call it more than one time if:
-      - all the asynchronous function it uses always call their callbacks and do it only once
+      - all the asynchronous function it uses always call their callbacks, do it only once and never *throw* (synchronous) errors.
       - there is no implicit calls to callback
 
   + **Callback typing**
@@ -74,7 +75,9 @@ The library isn't currently released on haxelib.
     One can type his @async function callback and macro will notice it. Sometimes it is even needed: when the function doesn't contain any implicit returns there is no way macro can know how many arguments it should callback with.
 
 ## ToDo
+  + better coder mistake detection
   + parralel code execution
   + **for** loops - are not converted currently
   + **try{...}catch(...){...}** expressions - are not converted currently
   + code samples should be added to this file
+  + handling of asynchronous functions which can to throw (synchronous) errors
