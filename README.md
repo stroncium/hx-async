@@ -90,3 +90,4 @@ The library isn't currently released on haxelib.
   + **try{...}catch(...){...}** expressions - are not converted currently
   + code samples should be added to this file
   + handling of asynchronous functions which can to throw (synchronous) errors
+  + **switch**es are not converted currently
