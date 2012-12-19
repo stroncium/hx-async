@@ -25,9 +25,9 @@ The library isn't currently released on haxelib.
   + Function can be implicitly converted by passing is to **async.Async.it()** macro.
 
   + Along the code convertion, the following will be processed and converted to asynchronous:
-    - **async(<arguments>)** calls - the main construct
+    - **async(<comma-separated list of calls>)** - the main construct
 
-      It accepts a comma-separated list of aynchronous calls. Each asynchronous call have form of
+      Each call have form of
         `<comma-separated list of identifiers> <= <function>(<arguments without callback>))`
         or
         `<function>(<arguments without callback>)` for functions which return pass only null/error to it's callback.
@@ -41,6 +41,15 @@ The library isn't currently released on haxelib.
       `async(a <= getA(), getB)()); /*some code*/` will be converted to (something like) `getA(function(error, a){ getB(function(error){/*some code*/ }); };`.
 
       Any error got from asynchronous functions called will be passed to main function callback.
+
+    - **parallel(<comma-separated list of calls>)** - construct to handle parallel execution
+
+        Calls have the same form as calls passed to async(...) but are executed in parallel.
+
+        First error returned from any of calls will be passed to higher level.
+
+        Calls can't use variable named the same of any variable parallel(...) construct will pass results to unless in deeper scopes.
+        That means `var a = 123; parallel(a <= getA(a));` will result in error which won't be detected.
 
     - **asyncr(<arguments>)** calls - are treated the same way as **async** calls, but callback arguments are used as is.
 
@@ -76,7 +85,7 @@ The library isn't currently released on haxelib.
 
 ## ToDo
   + better coder mistake detection
-  + parralel code execution
+  + more parallel execution options
   + **for** loops - are not converted currently
   + **try{...}catch(...){...}** expressions - are not converted currently
   + code samples should be added to this file

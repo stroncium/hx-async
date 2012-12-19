@@ -11,16 +11,32 @@ Test.__name__ = true;
 Test.__interfaces__ = [async.Build];
 Test.goAsync = function(cb) {
 	var c;
-	Test.delayGet(500,1,function(e,a) {
-		if(e == null) Test.delayGet(500,2,function(e1,b) {
-			if(e1 == null) Test.delayGet(500,a + b,function(e2,c1) {
-				if(e2 == null) {
-					console.log("1+2 == " + c1);
-					cb(null);
-				} else cb(e2);
-			}); else cb(e1);
-		}); else cb(e);
+	var a = null, b = null;
+	var parallelCounter = 3;
+	var afterParallel = function(e) {
+		if(e == null) {
+			if(--parallelCounter == 0) {
+				console.log("a+b == " + a + b);
+				cb(null);
+			}
+		} else {
+			parallelCounter = -1;
+			cb(e);
+		}
+	};
+	Test.delayGet(500,"a",function(e,_a) {
+		a = _a;
+		afterParallel(e);
 	});
+	Test.doError(false,afterParallel);
+	Test.delayGet(1500,"b",function(e,_b) {
+		b = _b;
+		afterParallel(e);
+	});
+}
+Test.doError = function(need,cb) {
+	var _need = need;
+	cb(_need?"planned error":null);
 }
 Test.delayGet = function(ms,val,cb) {
 	haxe.Timer.delay(function() {

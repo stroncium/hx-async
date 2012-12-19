@@ -62,20 +62,29 @@ class Test implements async.Build{
   @async
   static function goAsync(cb){
     var c;
-    async(
-      a <= delayGet(500, 1),
-      b <= delayGet(500, 2),
-      c <= delayGet(500, a+b),
-      doError(false)
+    //~ async(
+      //~ a <= delayGet(500, 1),
+      //~ b <= delayGet(500, 2),
+      //~ c <= delayGet(500, a+b),
+      //~ doError(false)
+    //~ );
+    parallel(
+      a <= delayGet(500, 'a'),
+      //a <= getA(), // will give error
+      doError(false),
+      b <= delayGet(1500, 'b')
     );
-    trace('1+2 == '+c);
+    trace('a+b == '+a+b);
   }
 
   static inline function log(txt:String){
     trace(txt);
   }
 
-  static inline function doError(need, cb) cb(need ? 'planned error' : null)
+  static inline function doError(need, cb){
+    var _need = need;
+    cb(_need ? 'planned error' : null);
+  }
   static inline function delay(ms:Int, cb){
     haxe.Timer.delay(function(){
       log(ms+' passed');

@@ -36,6 +36,7 @@ class Async{
 
   #if macro //
   static inline var ASYNC_CALL_FUN = 'async';
+  static inline var PARALLEL_CALL_FUN = 'parallel';
   static inline var ASYNC_RAW_FUN = 'asyncr';
   static inline var ASYNC_PASSTHROUGH_FUN = 'asyncPassthrough';
   static inline var LOOP_FUN = 'loop';
@@ -45,6 +46,7 @@ class Async{
   static inline var CALLBACK_FUN = 'cb';
 
   static var ASYNC_CALL;
+  static var PARALLEL_CALL;
   static var ASYNC_PASSTHROUGH;
   static var LOOP;
   static var AFTER_LOOP;
@@ -60,6 +62,7 @@ class Async{
     ZERO = EConst(CInt('0'));
 
     ASYNC_CALL = ASYNC_CALL_FUN.ident();
+    PARALLEL_CALL = PARALLEL_CALL_FUN.ident();
     ASYNC_PASSTHROUGH = ASYNC_PASSTHROUGH_FUN.ident();
     LOOP = LOOP_FUN.ident();
     AFTER_LOOP = AFTER_LOOP_FUN.ident();
@@ -76,7 +79,7 @@ class Async{
     }
   }
 
-  static function processThread(cbIdent:ExprDef, ghostPos:Position, isrc:Expr, pstate:State, inLoop = false):State{
+  static function convertTree(cbIdent:ExprDef, ghostPos:Position, isrc:Expr, pstate:State, inLoop = false):State{
     var src = switch(isrc.expr){
           case EBlock(blines): blines;
           default: [isrc];
@@ -125,6 +128,132 @@ class Async{
             args: cbArgs,
             //~ expr: expr(EBlock(newLines), pos),
             expr: EIf(
+              EBinop(OpEq, ERROR_NAME.ident().p(), NULL.p()).p(),
+              EBlock(newLines).p(),
+              cbIdent.p().call(ebArgs).p()
+            ).p(),
+            params: [],
+            ret: null,
+          }).p();
+      args.push(cb);
+      //~ trace(MacroHelpers.dump(realFunc));
+      lines.push(realFunc);
+      lines = newLines;
+      oldPos.set();
+    }
+
+    inline function processParallelCall(parallels:Array<{ids:Array<String>, fun:Expr}>){
+      switch(parallels.length){
+        case 0: //TODO show warning
+        case 1: //TODO process as single async call
+        default:
+          //TODO check our vars dont overlap with what we use in calls
+          var vars = [];
+          var idsUsed = new Hash();
+          for(par in parallels){
+            for(id in par.ids){
+              if(idsUsed.exists(id)){
+                throw 'double id'; //TODO
+              }
+              else{
+                idsUsed.set(id, true);
+                //~ vars.push({name:id, expr:null, type:null});
+                vars.push({name:id, expr:NULL.p(), type:null});
+              }
+            }
+          }
+          lines.push(EVars(vars).p()); //TODO position
+          lines.push(EVars([{name:'parallelCounter', type:null, expr: EConst(CInt(''+parallels.length)).p()}]).p());
+
+          var newLines = [];
+          var ebArgs = [ERROR_NAME.ident().p()];
+          ebCallArgsArray.push(ebArgs); // we'll add nulls and zeros later
+          var postParallel = EFunction('afterParallel', {
+                args: [{ name: ERROR_NAME, type: null, opt: false, value: null }],
+                expr: EIf(
+                  EBinop(OpEq, ERROR_NAME.ident().p(), NULL.p()).p(),
+                  EIf(
+                    EBinop(OpEq, EUnop(OpDecrement, false, 'parallelCounter'.ident().p()).p(), ZERO.p()).p(),
+                    EBlock(newLines).p(),
+                    null
+                  ).p(),
+                  EBlock([
+                    EBinop(OpAssign, 'parallelCounter'.ident().p(), EConst(CInt('-1')).p()).p(),
+                    cbIdent.p().call(ebArgs).p()
+                  ]).p()
+                ).p(),
+                params: [],
+                ret: null,
+              }).p();
+
+          lines.push(postParallel);
+          for(par in parallels){
+            var lcbArgs = [{ name: ERROR_NAME, type: null, opt: false, value: null }];
+            var lcbLines = [];
+            for(id in par.ids){
+              lcbArgs.push({ name: '_'+id, type: null, opt: false, value: null });
+              lcbLines.push(EBinop(OpAssign, id.ident().p(), ('_'+id).ident().p()).p());
+            }
+            lcbLines.push(
+              ECall('afterParallel'.ident().p(), [
+                ERROR_NAME.ident().p()
+              ]).p()
+            );
+            var lcb;
+            if(par.ids.length == 0){
+              lcb = 'afterParallel'.ident().p();
+            }
+            else{
+              var lcbArgs = [{ name: ERROR_NAME, type: null, opt: false, value: null }];
+              var lcbLines = [];
+              for(id in par.ids){
+                lcbArgs.push({ name: '_'+id, type: null, opt: false, value: null });
+                lcbLines.push(EBinop(OpAssign, id.ident().p(), ('_'+id).ident().p()).p());
+              }
+              lcbLines.push(
+                ECall('afterParallel'.ident().p(), [
+                  ERROR_NAME.ident().p()
+                ]).p()
+              );
+              lcb = EFunction(null, {
+                args: lcbArgs,
+                expr: EBlock(lcbLines).p(),
+                params: [],
+                ret: null,
+              }).p();
+            }
+            switch(par.fun.expr){
+              case ECall(_, args):
+                args.push(lcb);
+                lines.push(par.fun);
+              //~ case EBlock(blines): //TODO
+
+              default: throw 'not a function call';
+
+            }
+          }
+          lines = newLines;
+
+
+      }
+      /*
+      state.async = true;
+      var oldPos = Macro.getPos();
+      realFunc.pos.set();
+      var cbArgs = [{ name: ERROR_NAME, type: null, opt: false, value: null }];
+      for(par in asyncParams) cbArgs.push({
+        name:par.extractIdent(),
+        type:null,
+        opt:false,
+        value:null
+      });
+      var newLines = [];
+      var ebArgs = [ERROR_NAME.ident().p()];
+      ebCallArgsArray.push(ebArgs); // we'll add nulls and zeros later
+      var cb = EFunction(null, {
+            args: cbArgs,
+            //~ expr: expr(EBlock(newLines), pos),
+            expr: EIf(
               EBinop(OpEq, ERROR_NAME.ident().p(), 'null'.ident().p()).p(),
               EBlock(newLines).p(),
               cbIdent.p().call(ebArgs).p()
@@ -137,6 +266,7 @@ class Async{
       lines.push(realFunc);
       lines = newLines;
       oldPos.set();
+      */
     }
 
     inline function processAsyncRawCall(realFunc:Expr, args:Array<Expr>, asyncParams:Array<Expr>){
@@ -206,7 +336,7 @@ class Async{
           case ECall(func, args):{
             var id = func.extractIdent();
             if(id == ASYNC_CALL_FUN && args.length != 0){
-              var parallel = [];
+              var calls = [];
               var ids = [];
               for(arg in args){
                 switch(arg.expr){
@@ -214,13 +344,13 @@ class Async{
                     switch(op){
                       case OpLte:
                         ids.push(left);
-                        parallel.push({ids:ids, fun:right});
+                        calls.push({ids:ids, fun:right});
                         ids = [];
                       default:
                         throw 'unknown shit(bad op)';
                     }
                   case ECall(_,_):
-                    parallel.push({ids:[], fun:arg});
+                    calls.push({ids:[], fun:arg});
                     ids = [];
                   case EConst(_):
                     ids.push(arg);
@@ -228,13 +358,38 @@ class Async{
                     throw 'error';
                 }
               }
-              for(par in parallel){
-                switch(par.fun.expr){
+              for(call in calls){
+                switch(call.fun.expr){
                   //~ case ECall(func, callArgs): processAsyncCall(realFunc, callArgs, args);
-                  case ECall(_, callArgs): processAsyncCall(par.fun, callArgs, par.ids);
+                  case ECall(_, callArgs): processAsyncCall(call.fun, callArgs, call.ids);
                   default: throw 'not a function call';
                 }
               }
+            }
+            else if(id == PARALLEL_CALL_FUN){
+              var parallels = [];
+              var ids = [];
+              for(arg in args){
+                switch(arg.expr){
+                  case EBinop(op, left, right):
+                    switch(op){
+                      case OpLte:
+                        ids.push(left.extractIdent());
+                        parallels.push({ids:ids, fun:right});
+                        ids = [];
+                      default:
+                        throw 'unknown shit(bad op)';
+                    }
+                  case ECall(_,_):
+                    parallels.push({ids:[], fun:arg});
+                    ids = [];
+                  case EConst(_):
+                    ids.push(arg.extractIdent());
+                  default:
+                    throw 'error';
+                }
+              }
+              processParallelCall(parallels);
             }
             else if(id == ASYNC_PASSTHROUGH_FUN){
               for(arg in args)
@@ -256,7 +411,7 @@ class Async{
           }
 
           case EIf(econd, etrue, efalse):{
-            var tstate = processThread(cbIdent, ghostPos, etrue, state);
+            var tstate = convertTree(cbIdent, ghostPos, etrue, state);
             if(efalse == null){
               if(tstate.async) state.async = true;
               if(tstate.open){
@@ -286,7 +441,7 @@ class Async{
               }
             }
             else{
-              var fstate = processThread(cbIdent, ghostPos, efalse, state);
+              var fstate = convertTree(cbIdent, ghostPos, efalse, state);
 
               if(tstate.async || fstate.async) state.async = true;
               if(tstate.open == fstate.open){
@@ -328,7 +483,7 @@ class Async{
           }
 
           case EWhile(econd, expr, normal):{
-            var nstate = processThread(cbIdent, ghostPos, expr, state, true);
+            var nstate = convertTree(cbIdent, ghostPos, expr, state, true);
             if(nstate.async){
               state.async = true;
               //~ if(nstate.open){ //TODO closed async loop, isnt actually loop
@@ -478,7 +633,7 @@ class Async{
     };
     var cbIdent = cbArg.name.ident();
 
-    var newstate = processThread(
+    var newstate = convertTree(
           cbIdent,
           e.pos,
           e,
