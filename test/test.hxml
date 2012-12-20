@@ -1,4 +1,4 @@
 -main Test
 -lib async
 -js test.js
---dce full
+#--dce full

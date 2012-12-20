@@ -1,0 +1,4 @@
+-main Test
+-lib async
+-cpp test-cpp
+--dce full

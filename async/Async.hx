@@ -42,7 +42,7 @@ class Async{
   static inline var LOOP_FUN = 'loop';
   static inline var AFTER_LOOP_FUN = 'afterLoop';
   static inline var AFTER_BRANCH_FUN = 'afterBranch';
-  static inline var ERROR_NAME = 'e';
+  static inline var ERROR_NAME = '_e';
   static inline var CALLBACK_FUN = 'cb';
 
   static var ASYNC_CALL;
@@ -51,15 +51,19 @@ class Async{
   static var LOOP;
   static var AFTER_LOOP;
   static var AFTER_BRANCH;
-  static var ERROR;
+  static var ERROR:ExprDef;
   static var CALLBACK;
 
   static var NULL:ExprDef;
   static var ZERO:ExprDef;
+  static var TRUE:ExprDef;
+  static var FALSE:ExprDef;
 
   static function __init__(){
     NULL = 'null'.ident();
     ZERO = EConst(CInt('0'));
+    TRUE = 'true'.ident();
+    FALSE = 'false'.ident();
 
     ASYNC_CALL = ASYNC_CALL_FUN.ident();
     PARALLEL_CALL = PARALLEL_CALL_FUN.ident();
@@ -77,6 +81,27 @@ class Async{
       var pos = acc.get().pos;
       acc.set(ident.pos(pos).call([]).pos(pos));
     }
+  }
+
+  //~ function convertSelection(options:Array<Expr>){
+    //~ var asyncNum = 0;
+    //~ var i = options.length;
+    //~ while(i --> 0){
+      //~ var nstate = convertTree(afterTryIdent, ghostPos, expr, state, false);
+    //~ }
+  //~ }
+
+  static function haveCatchAll(catches:Array<{ name : String, type : ComplexType, expr : Expr }>){
+    for(cat in catches){
+      switch(cat.type){
+        case TPath(path):
+          if(path.name == 'Dynamic' && path.pack.length == 0){
+            return true;
+          }
+        default:
+      }
+    }
+    return false;
   }
 
   static function convertTree(cbIdent:ExprDef, ghostPos:Position, isrc:Expr, pstate:State, inLoop = false):State{
@@ -128,7 +153,7 @@ class Async{
             args: cbArgs,
             //~ expr: expr(EBlock(newLines), pos),
             expr: EIf(
-              EBinop(OpEq, ERROR_NAME.ident().p(), NULL.p()).p(),
+              EBinop(OpEq, ERROR.p(), NULL.p()).p(),
               EBlock(newLines).p(),
               cbIdent.p().call(ebArgs).p()
             ).p(),
@@ -336,6 +361,8 @@ class Async{
           case ECall(func, args):{
             var id = func.extractIdent();
             if(id == ASYNC_CALL_FUN && args.length != 0){
+              state.async = true;
+              //~ trace('setting state to async');
               var calls = [];
               var ids = [];
               for(arg in args){
@@ -585,10 +612,82 @@ class Async{
             break;
           }
 
+          case ETry(expr, catches):{
+            var afterTryIdent = 'afterTry'.ident();
+            var prevPos = Macro.getPos();
+            var nstate = convertTree(afterTryIdent, ghostPos, expr, state, false);
+            prevPos.set();
+            if(nstate.async){
+              state.async = true;
+              var newLines = [];
+              for(cat in catches){
+                switch(cat.expr.expr){
+                  case EBlock(blines):
+                    blines.push(EBinop(OpAssign, ERROR.p(), NULL.p()).p());
+                  default:
+                    cat.expr = EBlock([
+                      cat.expr,
+                      EBinop(OpAssign, ERROR.p(), NULL.p()).p(),
+                    ]).p();
+                }
+              }
+              if(!haveCatchAll(catches)){
+                catches.push({name:ERROR_NAME, type:TPath({name:'Dynamic', pack:[], params:[]}), expr:
+                  cbIdent.p().call([ERROR.p()]).p()
+                });
+              }
+              var afterLoop = EFunction('afterTry', {
+                    args: [{name:ERROR_NAME, type:null, opt:false}],
+                    expr: EBlock([
+                      EIf(
+                        EBinop(OpNotEq, ERROR.p(), NULL.p()).p(),
+                        ETry( EThrow(ERROR.p()).p(), catches ).p(),
+                        null
+                      ).p(),
+                      EIf(
+                        EBinop(OpEq, ERROR.p(), NULL.p()).p(),
+                        EBlock(newLines).p(),
+                        null
+                      ).p(),
+                    ]).p(),
+                    ret: null,
+                    params: [],
+                  }).p();
+              lines.push(afterLoop);
+              for(nline in nstate.rootLines) lines.push(nline);
+              if(nstate.open) nstate.lines.push(afterTryIdent.p().call([NULL.p()]).p());
+              lines = newLines;
+            }
+            else{
+              if(haveCatchAll(catches)){
+                lines.push(line);
+              }
+              else{
+
+                catches.push({
+                  name:ERROR_NAME,
+                  type:TPath({name:'Dynamic', pack:[], params:[]}),
+                  expr: EBlock([
+                    EBinop(OpAssign, 'noError'.ident().p(), FALSE.p()).p(),
+                    cbIdent.p().call([ERROR.p()]).p(),
+                  ]).p(),
+                });
+                var newLines = [];
+
+                lines.push(EVars([{name:'noError', type:null, expr:TRUE.p()}]).p());
+                lines.push(line);
+                lines.push(EIf('noError'.ident().p(), EBlock(newLines).p(), null).p());
+                lines = newLines;
+
+              }
+              //~ trace('sync try expr');
+              //TODO
+            }
+          }
+
           default: lines.push(line);
         }
       }
-
     //~ }
 
     state.lines = lines;

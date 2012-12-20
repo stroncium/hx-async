@@ -73,6 +73,12 @@ The library isn't currently released on haxelib.
       To return single value(except null for error) the normal *return value;* construction is used.
       To return multiple arguments *return many(value1, value2);* construction is used.
 
+    - **try{...}catch(...){...}**
+
+      Asynchronous catches not allowed.
+
+      May fail, needs better testing.
+
   + **Mission control**: if there is no return in your code - it will be implicitly added.
 
     All in all, there is no way @async function will never call it's callback or call it more than one time if:
@@ -87,7 +93,7 @@ The library isn't currently released on haxelib.
   + better coder mistake detection
   + more parallel execution options
   + **for** loops - are not converted currently
-  + **try{...}catch(...){...}** expressions - are not converted currently
+  + asynchronous **catch**es
   + code samples should be added to this file
   + handling of asynchronous functions which can to throw (synchronous) errors
   + **switch**es are not converted currently
