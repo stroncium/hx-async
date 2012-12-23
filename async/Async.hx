@@ -140,12 +140,28 @@ class Async{
       var oldPos = Macro.getPos();
       realFunc.pos.set();
       var cbArgs = [{ name: ERROR_NAME, type: null, opt: false, value: null }];
-      for(par in asyncParams) cbArgs.push({
-        name:par.extractIdent(),
-        type:null,
-        opt:false,
-        value:null
-      });
+      var assigns = [];
+      for(par in asyncParams){
+        var ident;
+        switch(par.expr){
+          case EArrayDecl(vals):
+            if(vals.length == 1){
+              ident = '__'+assigns.length;
+              assigns.push(vals[0]);
+            }
+            else{
+              throw 'error';
+            }
+          default:
+            ident = par.extractIdent();
+        }
+        cbArgs.push({
+          name:ident,
+          type:null,
+          opt:false,
+          value:null
+        });
+      }
       var newLines = [];
       var ebArgs = [ERROR_NAME.ident().p()];
       ebCallArgsArray.push(ebArgs); // we'll add nulls and zeros later
@@ -161,6 +177,10 @@ class Async{
             ret: null,
           }).p();
       args.push(cb);
+      var i = assigns.length;
+      while(i --> 0){
+        newLines.push(EBinop(OpAssign, assigns[i], ('__'+i).ident().p()).p());
+      }
       //~ trace(MacroHelpers.dump(realFunc));
       lines.push(realFunc);
       lines = newLines;
@@ -337,9 +357,9 @@ class Async{
       }
     }
 
-    var sources = [{src:src, pos:0}];
     var pos, len, run = true;
 
+    //~ var sources = [{src:src, pos:0}];
     //~ while(sources.length > 0 && run){
       //~ var tmp = sources.pop();
       //~ src = tmp.src;
@@ -358,6 +378,25 @@ class Async{
             //~ len = src.length;
           //~ }
 
+          //~ case ESwitch(e, cases, edef):
+            //var values : Array<Expr>;
+            //@:optional var guard : Null<Expr>;
+            //var expr: Expr;
+            //~ var trees = [];
+            //~ for(cas in cases){
+              //~ trees.push(cas.expr);
+            //~ }
+            //~ if(edef != null) trees.push(edef);
+            //~ var asyncs = 0;
+            //~ trees.map(trees, function(tree){
+              //~ var nstate = convertTree(cbIdent, ghostPos, etrue, state);
+              //~ if(nstate.async) asyncs++;
+              //~ return(nstate);
+            //~ });
+            //~ if(asyncs == 0){
+            //~ }
+
+
           case ECall(func, args):{
             var id = func.extractIdent();
             if(id == ASYNC_CALL_FUN && args.length != 0){
@@ -369,7 +408,7 @@ class Async{
                 switch(arg.expr){
                   case EBinop(op, left, right):
                     switch(op){
-                      case OpLte:
+                      case OpLt, OpLte:
                         ids.push(left);
                         calls.push({ids:ids, fun:right});
                         ids = [];
@@ -620,18 +659,51 @@ class Async{
             if(nstate.async){
               state.async = true;
               var newLines = [];
+              var afterCatchName = 'afterCatch';
+              var afterCatchIdent = afterCatchName.ident();
+              var afterCatch = EFunction(afterCatchName, {
+                    args: [{name:ERROR_NAME, type:null, opt:false}],
+                    expr: EIf(
+                      EBinop(OpEq, ERROR.p(), NULL.p()).p(),
+                      EBlock(newLines).p(),
+                      ECall(cbIdent.p(), [ERROR.p()]).p()
+                    ).p(),
+                    ret: null,
+                    params: [],
+                  }).p();
+              lines.push(afterCatch);
+
               for(cat in catches){
-                switch(cat.expr.expr){
-                  case EBlock(blines):
-                    blines.push(EBinop(OpAssign, ERROR.p(), NULL.p()).p());
-                  default:
-                    cat.expr = EBlock([
-                      cat.expr,
-                      EBinop(OpAssign, ERROR.p(), NULL.p()).p(),
-                    ]).p();
-                }
+                //~ trace(cat.expr.dump());
+                var cstate = convertTree(afterCatchIdent, ghostPos, cat.expr, state, false);
+                if(cstate.open) cstate.lines.push(ECall(afterCatchIdent.p(), [NULL.p()]).p());
+                cat.expr = EBlock(cstate.rootLines).p();
               }
-              if(!haveCatchAll(catches)){
+
+              //~ if(asyncCatches == 0){
+                //~ for(cat in catches){
+                  //~ switch(cat.expr.expr){
+                    //~ case EBlock(blines):
+                      //~ blines.push(EBinop(OpAssign, ERROR.p(), NULL.p()).p());
+                    //~ default:
+                      //~ cat.expr = EBlock([
+                        //~ cat.expr,
+                        //~ EBinop(OpAssign, ERROR.p(), NULL.p()).p(),
+                      //~ ]).p();
+                  //~ }
+                //~ }
+              //~ }
+              //~ else{
+                //~ for(cat in catches){
+                  //~ trace(cat.expr.dump());
+                  //~ var cstate = convertTree(afterCatchIdent, ghostPos, cat.expr, state, false);
+                  //~ cat.expr = EBlock(cstate.rootLines).p();
+                  //~ trace(cat.expr.dump());
+                  //~ if(cstate.async) asyncCatches++;
+                //~ }
+              //~ }
+
+              if(!haveCatchAll(catches)){ // catch all
                 catches.push({name:ERROR_NAME, type:TPath({name:'Dynamic', pack:[], params:[]}), expr:
                   cbIdent.p().call([ERROR.p()]).p()
                 });
@@ -646,7 +718,7 @@ class Async{
                       ).p(),
                       EIf(
                         EBinop(OpEq, ERROR.p(), NULL.p()).p(),
-                        EBlock(newLines).p(),
+                        ECall(afterCatchIdent.p(), [NULL.p()]).p(),
                         null
                       ).p(),
                     ]).p(),
@@ -762,9 +834,11 @@ class Async{
 
   static function convertClassFunction(fun:Function, whole){
     if(whole){
+      if(fun.args.length == 0) fun.args.push({name:'cb', type:null, opt:false});
       var cbArg = fun.args[fun.args.length - 1];
       var newexpr = syncToAsync(cbArg, fun.expr);
       fun.expr = newexpr;
+      trace(fun.expr.dump());
       //~ fun.expr = EUntyped(newexpr).pos(fun.expr.pos);
       //~ throw 'lol';
     }

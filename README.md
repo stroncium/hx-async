@@ -32,15 +32,15 @@ The library isn't currently released on haxelib.
         or
         `<function>(<arguments without callback>)` for functions which return pass only null/error to it's callback.
 
-      Stripping the code related to handling errors,
-
-      `async(getA(1, 2, 3)); /*some code*/` will be converted to (something like) `getA(1, 2, 3, function(error){ /*some code*/ })`.
-
-      `async(a <= getA()); /*some code*/` will be converted to (something like) `getA(function(error, a){ /*some code*/ })`.
-
-      `async(a <= getA(), getB)()); /*some code*/` will be converted to (something like) `getA(function(error, a){ getB(function(error){/*some code*/ }); };`.
-
       Any error got from asynchronous functions called will be passed to main function callback.
+
+      Stripping the code related to handling errors, the code will be converted as follows(actual AST may be different):
+
+      `async(getA(1, 2, 3)); /*some code*/` ⇒ `getA(1, 2, 3, function(error){ /*some code*/ })`.
+
+      `async(a <= getA()); /*some code*/` ⇒ `getA(function(error, a){ /*some code*/ })`.
+
+      `async(a <= getA(), getB)()); /*some code*/` ⇒ `getA(function(error, a){ getB(function(error){/*some code*/ }); };`.
 
     - **parallel(<comma-separated list of calls>)** - construct to handle parallel execution
 
@@ -75,8 +75,6 @@ The library isn't currently released on haxelib.
 
     - **try{...}catch(...){...}**
 
-      Asynchronous catches not allowed.
-
       May fail, needs better testing.
 
   + **Mission control**: if there is no return in your code - it will be implicitly added.
@@ -93,7 +91,7 @@ The library isn't currently released on haxelib.
   + better coder mistake detection
   + more parallel execution options
   + **for** loops - are not converted currently
-  + asynchronous **catch**es
+  + **try{...}catch(...){...}** can be further optimized
   + code samples should be added to this file
   + handling of asynchronous functions which can to throw (synchronous) errors
   + **switch**es are not converted currently

@@ -1,16 +1,18 @@
+import haxe.macro.Expr;
 class Test implements async.Build{
 
-
+  static var async:Dynamic;
   @async
   static function goAsync(cb){
     try{
-      async(doError(true));
-      trace('shouldn\'t happen: got error, but followed execution');
+      async(doError(false));
+      //~ throw('qwe');
     }
-    catch(e:Test){
-      trace('got error');
+    catch(e:String){
+      async(delay(100));
+      trace('catched e:'+e);
+      //~ throw('catched');
     }
-    async(delay(100));
     trace('good');
   }
 
