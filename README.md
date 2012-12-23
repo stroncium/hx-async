@@ -59,13 +59,17 @@ The library isn't currently released on haxelib.
 
     - **asyncr(<arguments>)** calls - are treated the same way as **async** calls, but callback arguments are used as is.
 
-    - **do** and **while** loops
+    - **do**, **while**, **for** loops
 
       The condition should be fully synchronous(in it's context)
       The expression is processed the same way as whole function.
       If expression doesn't contain any parts which need conversion, the code is left as is.
 
       **continue** and **break** expressions will be processed and exactly what you expect them to do.
+
+      For for loops the iterator should be explicitly specified ( `v in [1,2,3]` won't do).
+
+      Some cases can be handled badly, needs more testing.
 
     - **if** conditions
 
@@ -96,7 +100,7 @@ The library isn't currently released on haxelib.
 ## ToDo
   + better coder mistake detection
   + more parallel execution options
-  + **for** loops - are not converted currently
+  + loops logic may be broken for some cases, needs testing and maybe rework
   + **try{...}catch(...){...}** can be further optimized
   + code samples should be added to this file
   + handling of asynchronous functions which can to throw (synchronous) errors

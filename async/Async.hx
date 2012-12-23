@@ -757,6 +757,62 @@ class Async{
             }
           }
 
+          case EFor(iter, expr):{
+            var nstate = convertTree(cbIdent, ghostPos, expr, state, true);
+            if(nstate.async){
+              state.async = true;
+              var it, id;
+              switch(iter.expr){
+                case EIn(idexpr, _it):
+                  it = _it;
+                  id = idexpr.extractIdent();
+                default: throw 'error';
+              }
+              lines.push(EVars([{name:'it', type:null, expr:it}]).p());
+              var loopIdent = LOOP_FUN.ident();
+              var afterLoopIdent = AFTER_LOOP_FUN.ident();
+              var afterLoopLines = [];
+              nstate.lines.push(loopIdent.p().call([]).p());
+              nstate.rootLines.unshift(EVars([{
+                name:id,
+                type:null,
+                expr:ECall(EField('it'.ident().p(), 'next').p(), []).p()
+              }]).p());
+              var loopExpr =
+                    EBlock([EIf(
+                      ECall(EField('it'.ident().p(), 'hasNext').p(), []).p(),
+                      EBlock(nstate.rootLines).p(),
+                      afterLoopIdent.p().call([]).p()
+                    ).p()]).p();
+              var loop = EFunction(LOOP_FUN, {
+                    expr: loopExpr,
+                    args: [],
+                    ret: null,
+                    params: [],
+                  }).p();
+              var afterLoop = EFunction(AFTER_LOOP_FUN, {
+                    expr: EBlock(afterLoopLines).p(),
+                    args: [],
+                    ret: null,
+                    params: [],
+                  }).p();
+              lines.push(afterLoop);
+              lines.push(loop);
+              lines.push(loopIdent.p().call([]).p());
+              lines = afterLoopLines;
+              replaceExpressionsWithCalls(nstate.loopBreaks, afterLoopIdent);
+              replaceExpressionsWithCalls(nstate.loopConts, loopIdent);
+            }
+            else{
+              if(nstate.open){
+                lines.push(line);
+              }
+              else{
+                //TODO
+              }
+            }
+
+          }
           default: lines.push(line);
         }
       }

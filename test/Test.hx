@@ -4,14 +4,10 @@ class Test implements async.Build{
   static var async:Dynamic;
   @async
   static function goAsync(cb){
-    try{
-      async(doError(false));
-      //~ throw('qwe');
-    }
-    catch(e:String){
+    for(a in 0...3){
+      trace('hop '+a);
       async(delay(100));
-      trace('catched e:'+e);
-      //~ throw('catched');
+      if(Math.random() > 0.5) break;
     }
     trace('good');
   }
