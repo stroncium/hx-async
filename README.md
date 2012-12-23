@@ -32,13 +32,19 @@ The library isn't currently released on haxelib.
         or
         `<function>(<arguments without callback>)` for functions which return pass only null/error to it's callback.
 
+      If identifier is an expression inclosed in square brackets, this expression will be directly assigned.
+
       Any error got from asynchronous functions called will be passed to main function callback.
 
       Stripping the code related to handling errors, the code will be converted as follows(actual AST may be different):
 
-      `async(getA(1, 2, 3)); /*some code*/` ⇒ `getA(1, 2, 3, function(error){ /*some code*/ })`.
+      `async(getA(1, 2, 3)); /*some code*/` ⇒ `getA(1, 2, 3, function(error){ /*some code*/ })`
 
-      `async(a <= getA()); /*some code*/` ⇒ `getA(function(error, a){ /*some code*/ })`.
+      `async(a <= getA()); /*some code*/` ⇒ `getA(function(error, a){ /*some code*/ })`
+
+      `async([a[0]] <= getA()); /*some code*/` ⇒ `getA(function(error, v1){ a[0] = v1; /*some code*/ })`
+
+      note than you can't use 'v1' to access value, as the identifier is dynamically generated and is just an example.
 
       `async(a <= getA(), getB)()); /*some code*/` ⇒ `getA(function(error, a){ getB(function(error){/*some code*/ }); };`.
 
