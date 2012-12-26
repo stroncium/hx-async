@@ -15,6 +15,94 @@ However, there is a simple way to also use functions which call their callbacks 
 
 The library isn't currently released on haxelib.
 
+## Example
+
+    //class should implement async.Build
+    //compiling should be done with -lib async
+
+    //in this function we think of everything like it is synchronous
+    //but most parts are not
+    @async
+    static function asynchronous(int:Int, string:String, MARKER_cb){
+      var i = 3;
+      while(i --> 0) async(delay(10));
+
+      var result = [null, null];
+      async([result[0]] < asyncGet(string));
+      async([result[1]] < asyncGet(string));
+      trace('array: '+result);
+
+      async(a, b < asyncGet2(string, string));
+      trace('got '+a+' and '+b);
+      try{
+        syncThrow(); // synchronous as hell
+      }
+      catch(e:String){
+        trace('got error: '+e);
+        trace('thinking...');
+        async(delay(100));
+        trace('realized we dont care about this error');
+      }
+      //other errors will go to callback
+
+      try{
+        async(throwAsyncErrorIfTrue(false, 'error 1'));
+        async(throwAsyncErrorIfTrue(true, 'error 2'));
+      }
+      catch(e:String){
+        trace('error, just as we expected: '+e);
+      }
+
+      parallel(
+        v1 < asyncGet(string),
+        v2 < asyncGet(string),
+        delay(100)
+      );
+      trace('we have '+v1+' and '+v2+', at least 100 ms passed');
+
+      for(i in 0...10){
+        switch(i){
+          case 2:
+            trace('2 always takes longer');
+            async(delay(100));
+          case 3:
+            trace('don\'t like number 3');
+            continue;
+          case 4:
+            trace('4 is enough');
+            break;
+          default:
+        }
+        trace('it\'s '+i);
+      }
+      if(result[0] == string){ //which is always true in our case
+        return many(222, 'another string');
+      }
+      return many(111, 'string');
+    }
+
+    @async
+    static function asyncGet<T>(val:T, cb){
+      return val;
+    }
+
+    //freely integrates with normal asynchronous functions
+    static function asyncGet2<T1, T2>(v1:T1, v2:T2, cb){
+      cb(null, v1, v2);
+    }
+
+    @async
+    static function throwAsyncErrorIfTrue(bool, err, cb){
+      if(bool) throw err;
+    }
+
+    static function syncThrow(){
+      trace('random calculations throw exception');
+      throw 'too hard to calculate';
+    }
+
+
+
 
 ## Features / Done
 
@@ -111,11 +199,13 @@ The library isn't currently released on haxelib.
 
 
 ## ToDo
+  + parallel(...) should support direct assigns, just as async(...)
   + //TODO in code
   + testing, testing, testing (unit?)
   + code samples should be added to this file
 
 ## Further improvements
+  + check source code mapping, it may be broken in some cases
   + better coder mistake detection
   + more parallel execution options
   + enriching errors with stacktrace-like information

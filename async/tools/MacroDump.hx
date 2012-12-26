@@ -215,9 +215,8 @@ class MacroDump{
       case EBinop(op, e1, e2): return dumpBinop(op, e1, e2);
       case EArrayDecl(values): return '['+values.map(dumpExpr).join(', ')+']';
       //~ case EArray(e1 : Expr,e2 : Expr)
-      case EArray(_,_):
-        throw 'array';
-        return null;
+      case EArray(e1, e2):
+        return dumpExpr(e1)+'['+dumpExpr(e2)+']';
 
     }
   }

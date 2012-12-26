@@ -1,54 +1,53 @@
 import haxe.macro.Expr;
 
 class Test implements async.Build{
-
-  @async
-  static function goAsync(cb){
-
-    //~ async(delay(10));
-    //~ async(delay(10));
-    //~ async(delay(10));
-    //~ async(delay(10));
-
-    //~ var i = 3;
-    //~ while(i --> 0){
-      //~ async(delay(10));
-      //~ trace('hop');
-      //~ if(Math.random() > 0.5) break;
-      //~ else continue;
-      //~ trace('ololo');
-    //~ }
-
-    //~ for(v in 0...4){
-      //~ try{
-        //~ switch(v){
-          //~ case 0:
-            //~ async(delay(10));
-          //~ case 1:
-            //~ trace('lol');
-          //~ case 2:
-            //~ throw 'ooops';
-          //~ default:
-            //~ return;
-        //~ }
-      //~ }catch(e:String){trace(e);}
-      //~ trace('ahah');
-    //~ }
 //~
-    //~ try{
-      //~ try{
-        //~ async(delay(10));
-        //~ throw 'error';
-      //~ }
-      //~ catch(e:String){
-        //~ trace(e);
-        //~ throw e;
-      //~ }
-    //~ }
-    //~ catch(e:String){
-      //~ trace('this exception doesn\'t dissolve');
-    //~ }
-
+  @async
+  static function asynchronous(cb){
+    async(delay(10));
+    async(delay(10));
+    async(delay(10));
+    async(delay(10));
+//~
+    var i = 3;
+    while(i --> 0){
+      async(delay(10));
+      trace('hop');
+      if(Math.random() > 0.5) break;
+      else continue;
+      trace('ololo');
+    }
+//~
+    for(v in 0...4){
+      try{
+        switch(v){
+          case 0:
+            async(delay(10));
+          case 1:
+            trace('lol');
+          case 2:
+            throw 'ooops';
+          default:
+            return;
+        }
+      }catch(e:String){trace(e);}
+      trace('ahah');
+    }
+//~ //~
+    try{
+      try{
+        async(delay(10));
+        throw 'error';
+      }
+      catch(e:String){
+        trace(e);
+        throw e;
+      }
+    }
+    catch(e:String){
+      trace('this exception doesn\'t dissolve');
+    }
+//~ //~
     parallel(
       a <= delayGet(10, 1),
       b <= delayGet(10, 2)
@@ -72,12 +71,20 @@ class Test implements async.Build{
   }
 
   public static function main(){
-    goAsync(function(err){
+    //~ asynchronous(10, 'string', function(err, v1:Int, v2:String){
+      //~ if(err != null){
+        //~ trace('Error: '+err);
+      //~ }
+      //~ else{
+        //~ trace('finished: '+v1+', '+v2);
+      //~ }
+    //~ });
+    asynchronous(function(err){
       if(err != null){
         trace('Error: '+err);
       }
       else{
-        trace('finished');
+        trace(' == finished');
       }
     });
   }

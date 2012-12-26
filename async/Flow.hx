@@ -67,7 +67,8 @@ class Flow{
       for(thr in flow.repsThrow){
         switch(thr.expr){
           case EThrow(e): thr.expr = ECall(cb, [e]);
-          default: throw 'shouldnt happen, not a throw: '+thr;
+          default:
+          //~ default: throw 'shouldnt happen, not a throw: '+thr;
         }
       }
     }
@@ -91,7 +92,8 @@ class Flow{
             var args = ref.copy();
             args[0] = e;
             thr.expr = ECall(cb, args);
-          default: throw 'shouldnt happen';
+          default:
+          //~ default: throw 'shouldnt happen, not a throw: '+thr;
         }
       }
     }
@@ -105,12 +107,11 @@ class Flow{
   }
 
 
-  static inline var PREFIX = #if async_readable '' #else '__' #end;
+  static inline var PREFIX = #if async_readable '_' #else '__' #end;
   static inline var ASYNC_CALL_FUN = 'async';
   static inline var PARALLEL_CALL_FUN = 'parallel';
   static inline var ASYNC_RAW_FUN = 'asyncr';
 
-  //~ var lastCallExpr:Expr;
 
   inline function finalize(?call){
     if(open){
@@ -133,15 +134,8 @@ class Flow{
 
   inline function jumpIn(newLines, ?callExpr){
     lines = newLines;
-    //~ lastCallExpr = callExpr;
   }
 
-  //~ static inline function replaceExpressionsWithCalls(arr:Array<{a:Array<Expr>, p:Int}>, call:ExprDef){
-    //~ for(acc in arr){
-      //~ acc.set(call.pos(acc.get().pos));
-    //~ }
-  //~ }
-//~
   static inline function makeErrorFun(name:String, lines:Array<Expr>, onError:Expr){
     return EFunction(name, {
       args: [{name:ERROR_NAME, type:null, opt:false}],
@@ -277,7 +271,16 @@ class Flow{
       cbArgs.push({name:ident, type:null, opt:false, value:null});
     }
     var newLines = [];
-    var fun = makeErrorFun(null, newLines, ebCall(ERROR.p()) );
+    var fun = EFunction(null, {
+          args: cbArgs,
+          expr: EIf(
+            EBinop(OpEq, ERROR.p(), NULL.p()).p(),
+            EBlock(newLines).p(),
+            ebCall(ERROR.p())
+          ).p(),
+          ret: null,
+          params: [],
+        }).p();
     args.push(fun);
     var i = assigns.length;
     while(i --> 0){
@@ -296,8 +299,8 @@ class Flow{
 
   inline function processParallelCall(parallels:Array<{ids:Array<String>, fun:Expr}>){
     switch(parallels.length){
-      case 0: //TODO show warning
-      case 1: //TODO process as single async call
+      //~ case 0: //TODO show warning
+      //~ case 1: //TODO process as single async call
       default:
         //TODO check our vars dont overlap with what we use in calls
         var parallelCounterN = PARALLEL_COUNTER+gen(), afterParallelN = AFTER_PARALLEL+gen();
@@ -311,7 +314,6 @@ class Flow{
             }
             else{
               idsUsed.set(id, true);
-              //~ vars.push({name:id, expr:null, type:null});
               vars.push({name:id, expr:NULL.p(), type:null});
             }
           }
@@ -343,7 +345,7 @@ class Flow{
           lcbLines.push(afterParallelI.p().call([ERROR.p()]).p());
           var lcb;
           if(par.ids.length == 0){
-            lcb = AFTER_PARALLEL.ident().p();
+            lcb = afterParallelI.p();
           }
           else{
             var lcbArgs = [{ name: ERROR_NAME, type: null, opt: false, value: null }];
@@ -499,7 +501,7 @@ class Flow{
                       calls.push({ids:ids, fun:right});
                       ids = [];
                     default:
-                      throw 'unknown shit(bad op)';
+                      throw 'bad op: '+op;
                   }
                 case ECall(_,_):
                   calls.push({ids:[], fun:arg});
@@ -524,12 +526,12 @@ class Flow{
               switch(arg.expr){
                 case EBinop(op, left, right):
                   switch(op){
-                    case OpLte:
+                    case OpLte, OpLt:
                       ids.push(left.extractIdent());
                       parallels.push({ids:ids, fun:right});
                       ids = [];
                     default:
-                      throw 'unknown shit(bad op)';
+                      throw 'bad op: '+op;
                   }
                 case ECall(_,_):
                   parallels.push({ids:[], fun:arg});
@@ -754,80 +756,59 @@ class Flow{
           var prevPos = Macro.getPos();
           var flow = mkTry(expr);
           prevPos.set();
-          if(flow.async){
-            async = true;
+          async = true;
 
             var newLines = [];
             lines.push(makeErrorFun(afterCatchN, newLines, ebCall(ERROR.p())));
-
-            for(thr in flow.repsThrow){
-              switch(thr.expr){
-                case EThrow(e): thr.expr = ECall(afterTryI.p(), [e]);
-                default: throw 'shouldnt happen';
-              }
-            }
-
-            for(cat in catches){
-              var cflow = mkFlow(cat.expr);
-              cflow.finalize(EBinop(OpAssign, ERROR.p(), NULL.p()).p());
-              //~ if(cflow.open){
-                //~ cflow.lines.push(EBinop(OpAssign, ERROR.p(), NULL.p()).p());
-              //~ }
-              cat.expr = cflow.expr();
-            }
 
             if(!haveCatchAll(catches)){ // catch all
               catches.push({name:ERROR_NAME, type:TPath({name:'Dynamic', pack:[], params:[]}), expr:
                 ebCall(ERROR.p())
               });
             }
-            lines.push(EFunction(afterTryN, {
-              args: [{name:ERROR_NAME, type:null, opt:false}],
-              expr: EBlock([
-                EIf(
+
+            for(thr in flow.repsThrow){
+              switch(thr.expr){
+                case EThrow(e): thr.expr = ECall(afterTryI.p(), [e]);
+                default:
+                //~ default: throw 'shouldnt happen';
+              }
+            }
+
+
+            if(flow.async){
+              for(cat in catches){
+                var cflow = mkFlow(cat.expr);
+                cflow.finalize(afterCatchI.p().call([NULL.p()]).p());
+                //~ cflow.finalize(EBinop(OpAssign, ERROR.p(), NULL.p()).p());
+                cat.expr = cflow.expr();
+              }
+
+              lines.push(EFunction(afterTryN, {
+                args: [{name:ERROR_NAME, type:null, opt:false}],
+                expr: EIf(
                   EBinop(OpNotEq, ERROR.p(), NULL.p()).p(),
                   ETry( EThrow(ERROR.p()).p(), catches ).p(),
                   null
                 ).p(),
-                EIf(
-                  EBinop(OpEq, ERROR.p(), NULL.p()).p(),
-                  ECall(afterCatchI.p(), [NULL.p()]).p(),
-                  null
-                ).p(),
-              ]).p(),
-              ret: null,
-              params: [],
-            }).p());
-            if(flow.open) flow.lines.push(afterTryI.p().call([NULL.p()]).p());
-            for(nline in flow.root) lines.push(nline);
-            jumpIn(newLines);
-          }
-          else{
-            if(haveCatchAll(catches)){
-              lines.push(line);
+                ret: null,
+                params: [],
+              }).p());
+              if(flow.open) flow.lines.push(afterTryI.p().call([NULL.p()]).p());
+              for(nline in flow.root) lines.push(nline);
             }
             else{
+              for(cat in catches){
+                var cflow = mkFlow(cat.expr);
+                //~ cflow.finalize(afterTryI.p().call([NULL.p()]).p());
+                cflow.finalize(afterCatchI.p().call([NULL.p()]).p());
+                cat.expr = cflow.expr();
+              }
 
-              catches.push({
-                name:ERROR_NAME,
-                type:TPath({name:'Dynamic', pack:[], params:[]}),
-                expr: EBlock([
-                  EBinop(OpAssign, NO_ERROR.ident().p(), FALSE.p()).p(),
-                  ebCall(ERROR.p()),
-                ]).p(),
-              });
-              var newLines = [];
-
-              lines.push(EVars([{name:NO_ERROR, type:null, expr:TRUE.p()}]).p());
-              lines.push(line);
-              lines.push(EIf(NO_ERROR.ident().p(), EBlock(newLines).p(), null).p());
-              lines = newLines;
-
+              lines.push(ETry(flow.expr(), catches).p());
             }
-            //~ trace('sync try expr');
-            //TODO
+            jumpIn(newLines);
           }
-        }
 
         default: lines.push(line);
       }
