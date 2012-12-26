@@ -1,7 +1,7 @@
 # async - Asynchronous programming in HaXe made easy.
 
-
-## Beta version.
+## Beta version
+.
 The aim of the project is to use the power of HaXe macro system to make complex asynchronous operations easier to write and read.
 
 The main concept is to look at seemingly synchronous code with special markings and convert it to asynchronous code with the same overall flow as we seen in synchronous code (in compile time).
@@ -57,7 +57,7 @@ The library isn't currently released on haxelib.
         Calls can't use variable named the same of any variable parallel(...) construct will pass results to unless in deeper scopes.
         That means `var a = 123; parallel(a <= getA(a));` will result in error which won't be detected.
 
-    - **asyncr(<arguments>)** calls - are treated the same way as **async** calls, but callback arguments are used as is.
+    - **DISABLED** **asyncr(<arguments>)** calls - are treated the same way as **async** calls, but callback arguments are used as is.
 
     - **do**, **while**, **for** loops
 
@@ -85,7 +85,13 @@ The library isn't currently released on haxelib.
 
     - **try{...}catch(...){...}**
 
-      May fail, needs better testing.
+      Should work, asynchronously. But needs better testing.
+      If there is no asynchronous constructions inside try expression(throw doesnt count as aync construction for that case)
+      the expression will be left synchronous, which allows to use functions throwing synchronous exceptions,
+      however throws in catch expressions will be processed accroding to it's context, sync inside try, async in functions.
+
+  + **switch**es
+      They work.
 
   + **Mission control**: if there is no return in your code - it will be implicitly added.
 
@@ -95,13 +101,22 @@ The library isn't currently released on haxelib.
 
   + **Callback typing**
 
-    One can type his @async function callback and macro will notice it. Sometimes it is even needed: when the function doesn't contain any implicit returns there is no way macro can know how many arguments it should callback with.
+    One can type his @async function callback and macro will notice it.
+    Sometimes it is even needed: when the function doesn't contain any implicit returns there is no way macro can know how many arguments it should callback with.
+    However, if function takes no arguments, untyped callback argument will be added. (As I found myself forgetting to add it sometimes.)
+
+  + Other
+
+    Use `-D async_readable` comilation flag to make async code more readable.
+
 
 ## ToDo
+  + //TODO in code
+  + testing, testing, testing (unit?)
+  + code samples should be added to this file
+
+## Further improvements
   + better coder mistake detection
   + more parallel execution options
-  + loops logic may be broken for some cases, needs testing and maybe rework
-  + **try{...}catch(...){...}** can be further optimized
-  + code samples should be added to this file
-  + handling of asynchronous functions which can to throw (synchronous) errors
-  + **switch**es are not converted currently
+  + enriching errors with stacktrace-like information
+  + some code can be simplified, amount of calls reduced (functions which just check error and call next function which will also check for same errors)

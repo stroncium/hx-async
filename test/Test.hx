@@ -1,15 +1,59 @@
 import haxe.macro.Expr;
+
 class Test implements async.Build{
 
-  static var async:Dynamic;
   @async
   static function goAsync(cb){
-    for(a in 0...3){
-      trace('hop '+a);
-      async(delay(100));
-      if(Math.random() > 0.5) break;
-    }
-    trace('good');
+
+    //~ async(delay(10));
+    //~ async(delay(10));
+    //~ async(delay(10));
+    //~ async(delay(10));
+
+    //~ var i = 3;
+    //~ while(i --> 0){
+      //~ async(delay(10));
+      //~ trace('hop');
+      //~ if(Math.random() > 0.5) break;
+      //~ else continue;
+      //~ trace('ololo');
+    //~ }
+
+    //~ for(v in 0...4){
+      //~ try{
+        //~ switch(v){
+          //~ case 0:
+            //~ async(delay(10));
+          //~ case 1:
+            //~ trace('lol');
+          //~ case 2:
+            //~ throw 'ooops';
+          //~ default:
+            //~ return;
+        //~ }
+      //~ }catch(e:String){trace(e);}
+      //~ trace('ahah');
+    //~ }
+//~
+    //~ try{
+      //~ try{
+        //~ async(delay(10));
+        //~ throw 'error';
+      //~ }
+      //~ catch(e:String){
+        //~ trace(e);
+        //~ throw e;
+      //~ }
+    //~ }
+    //~ catch(e:String){
+      //~ trace('this exception doesn\'t dissolve');
+    //~ }
+
+    parallel(
+      a <= delayGet(10, 1),
+      b <= delayGet(10, 2)
+    );
+    trace(a+b);
   }
 
   static inline function log(txt:String){
@@ -21,25 +65,19 @@ class Test implements async.Build{
     cb(_need ? 'planned error' : null);
   }
   static inline function delay(ms:Int, cb){
-    platformDelay(ms, function(){
-      log(ms+' passed');
-      cb(null);
-    });
+    platformDelay(ms, function(){ log(ms+' passed'); cb(null); });
   }
   static inline function delayGet(ms:Int, val:Dynamic, cb){
-    platformDelay(ms, function(){
-      log(ms+' passed, returning '+val);
-      cb(null, val);
-    });
+    platformDelay(ms, function(){ log(ms+' passed, returning '+val); cb(null, val); });
   }
 
   public static function main(){
-    //~ try { throw null; }
-    //~ catch(e:Int){}
-    //~ catch(e:Float){}
     goAsync(function(err){
       if(err != null){
         trace('Error: '+err);
+      }
+      else{
+        trace('finished');
       }
     });
   }

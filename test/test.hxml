@@ -2,3 +2,4 @@
 -lib async
 -js test.js
 #--dce full
+-D async_readable
