@@ -15,7 +15,7 @@ However, there is a simple way to also use functions which call their callbacks 
 
 The library isn't currently released on haxelib.
 
-## Example
+## Example (same code as in test/)
 
     //class should implement async.Build
     //compiling should be done with -lib async
@@ -28,8 +28,8 @@ The library isn't currently released on haxelib.
       while(i --> 0) async(delay(10));
 
       var result = [null, null];
-      async([result[0]] < asyncGet(string));
-      async([result[1]] < asyncGet(string));
+      async([result[0]] < asyncGet(string)); //direct assign
+      async([result[1]] < asyncGet(string)); //direct assign
       trace('array: '+result);
 
       async(a, b < asyncGet2(string, string));
@@ -53,7 +53,7 @@ The library isn't currently released on haxelib.
         trace('error, just as we expected: '+e);
       }
 
-      parallel(
+      parallel( // direct assigns in parallel are not supported yet
         v1 < asyncGet(string),
         v2 < asyncGet(string),
         delay(100)
@@ -61,6 +61,7 @@ The library isn't currently released on haxelib.
       trace('we have '+v1+' and '+v2+', at least 100 ms passed');
 
       for(i in 0...10){
+        trace('it\'s '+i);
         switch(i){
           case 2:
             trace('2 always takes longer');
@@ -71,9 +72,9 @@ The library isn't currently released on haxelib.
           case 4:
             trace('4 is enough');
             break;
-          default:
+          //~ default:
         }
-        trace('it\'s '+i);
+        trace('done with '+i);
       }
       if(result[0] == string){ //which is always true in our case
         return many(222, 'another string');
@@ -100,7 +101,6 @@ The library isn't currently released on haxelib.
       trace('random calculations throw exception');
       throw 'too hard to calculate';
     }
-
 
 
 

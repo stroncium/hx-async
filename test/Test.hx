@@ -1,58 +1,85 @@
 import haxe.macro.Expr;
 
 class Test implements async.Build{
-//~
+
   @async
-  static function asynchronous(cb){
-    async(delay(10));
-    async(delay(10));
-    async(delay(10));
-    async(delay(10));
-//~
+  static function asynchronous(int:Int, string:String, MARKER_cb){
     var i = 3;
-    while(i --> 0){
-      async(delay(10));
-      trace('hop');
-      if(Math.random() > 0.5) break;
-      else continue;
-      trace('ololo');
-    }
-//~
-    for(v in 0...4){
-      try{
-        switch(v){
-          case 0:
-            async(delay(10));
-          case 1:
-            trace('lol');
-          case 2:
-            throw 'ooops';
-          default:
-            return;
-        }
-      }catch(e:String){trace(e);}
-      trace('ahah');
-    }
-//~ //~
+    while(i --> 0) async(delay(10));
+
+    var result = [null, null];
+    async([result[0]] < asyncGet(string)); //direct assign
+    async([result[1]] < asyncGet(string)); //direct assign
+    trace('array: '+result);
+
+    async(a, b < asyncGet2(string, string));
+    trace('got '+a+' and '+b);
     try{
-      try{
-        async(delay(10));
-        throw 'error';
-      }
-      catch(e:String){
-        trace(e);
-        throw e;
-      }
+      syncThrow(); // synchronous as hell
     }
     catch(e:String){
-      trace('this exception doesn\'t dissolve');
+      trace('got error: '+e);
+      trace('thinking...');
+      async(delay(100));
+      trace('realized we dont care about this error');
     }
-//~ //~
-    parallel(
-      a <= delayGet(10, 1),
-      b <= delayGet(10, 2)
+    //other errors will go to callback
+
+    try{
+      async(throwAsyncErrorIfTrue(false, 'error 1'));
+      async(throwAsyncErrorIfTrue(true, 'error 2'));
+    }
+    catch(e:String){
+      trace('error, just as we expected: '+e);
+    }
+
+    parallel( // direct assigns in parallel are not supported yet
+      v1 < asyncGet(string),
+      v2 < asyncGet(string),
+      delay(100)
     );
-    trace(a+b);
+    trace('we have '+v1+' and '+v2+', at least 100 ms passed');
+
+    for(i in 0...10){
+      trace('it\'s '+i);
+      switch(i){
+        case 2:
+          trace('2 always takes longer');
+          async(delay(100));
+        case 3:
+          trace('don\'t like number 3');
+          continue;
+        case 4:
+          trace('4 is enough');
+          break;
+        //~ default:
+      }
+      trace('done with '+i);
+    }
+    if(result[0] == string){ //which is always true in our case
+      return many(222, 'another string');
+    }
+    return many(111, 'string');
+  }
+
+  @async
+  static function asyncGet<T>(val:T, cb){
+    return val;
+  }
+
+  //freely integrates with normal asynchronous functions
+  static function asyncGet2<T1, T2>(v1:T1, v2:T2, cb){
+    cb(null, v1, v2);
+  }
+
+  @async
+  static function throwAsyncErrorIfTrue(bool, err, cb){
+    if(bool) throw err;
+  }
+
+  static function syncThrow(){
+    trace('random calculations throw exception');
+    throw 'too hard to calculate';
   }
 
   static inline function log(txt:String){
@@ -71,22 +98,26 @@ class Test implements async.Build{
   }
 
   public static function main(){
-    //~ asynchronous(10, 'string', function(err, v1:Int, v2:String){
-      //~ if(err != null){
-        //~ trace('Error: '+err);
-      //~ }
-      //~ else{
-        //~ trace('finished: '+v1+', '+v2);
-      //~ }
-    //~ });
-    asynchronous(function(err){
+    var it = 0...1;
+    trace(it.hasNext());
+    var f = it.hasNext;
+    trace(f());
+    asynchronous(10, 'string', function(err, v1:Int, v2:String){
       if(err != null){
         trace('Error: '+err);
       }
       else{
-        trace(' == finished');
+        trace('finished: '+v1+', '+v2);
       }
     });
+    //~ asynchronous(function(err){
+      //~ if(err != null){
+        //~ trace('Error: '+err);
+      //~ }
+      //~ else{
+        //~ trace(' == finished');
+      //~ }
+    //~ });
   }
 
   static inline function platformDelay(ms:Int, fun){

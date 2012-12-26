@@ -733,6 +733,7 @@ class Flow{
             lines.push(line);
           }
           else{
+            //~ if(edef == null) throw 'not implemented switch with no default';
             async = true;
             var afterSwitchN = AFTER_SWITCH+gen();
             var afterSwitchI = afterSwitchN.ident();
@@ -745,7 +746,7 @@ class Flow{
             while(i --> 0){
               cases[i].expr = EBlock(states[i].root).p();
             }
-            lines.push(ESwitch(e, cases, edef == null ? null : EBlock(states[states.length - 1].root).p()).p());
+            lines.push(ESwitch(e, cases, edef == null ? afterSwitchI.p().call([]).p() : EBlock(states[states.length - 1].root).p()).p());
             lines = newLines;
           }
         }
@@ -758,57 +759,56 @@ class Flow{
           prevPos.set();
           async = true;
 
-            var newLines = [];
-            lines.push(makeErrorFun(afterCatchN, newLines, ebCall(ERROR.p())));
+          var newLines = [];
+          lines.push(makeErrorFun(afterCatchN, newLines, ebCall(ERROR.p())));
 
-            if(!haveCatchAll(catches)){ // catch all
-              catches.push({name:ERROR_NAME, type:TPath({name:'Dynamic', pack:[], params:[]}), expr:
-                ebCall(ERROR.p())
-              });
-            }
-
-            for(thr in flow.repsThrow){
-              switch(thr.expr){
-                case EThrow(e): thr.expr = ECall(afterTryI.p(), [e]);
-                default:
-                //~ default: throw 'shouldnt happen';
-              }
-            }
-
-
-            if(flow.async){
-              for(cat in catches){
-                var cflow = mkFlow(cat.expr);
-                cflow.finalize(afterCatchI.p().call([NULL.p()]).p());
-                //~ cflow.finalize(EBinop(OpAssign, ERROR.p(), NULL.p()).p());
-                cat.expr = cflow.expr();
-              }
-
-              lines.push(EFunction(afterTryN, {
-                args: [{name:ERROR_NAME, type:null, opt:false}],
-                expr: EIf(
-                  EBinop(OpNotEq, ERROR.p(), NULL.p()).p(),
-                  ETry( EThrow(ERROR.p()).p(), catches ).p(),
-                  null
-                ).p(),
-                ret: null,
-                params: [],
-              }).p());
-              if(flow.open) flow.lines.push(afterTryI.p().call([NULL.p()]).p());
-              for(nline in flow.root) lines.push(nline);
-            }
-            else{
-              for(cat in catches){
-                var cflow = mkFlow(cat.expr);
-                //~ cflow.finalize(afterTryI.p().call([NULL.p()]).p());
-                cflow.finalize(afterCatchI.p().call([NULL.p()]).p());
-                cat.expr = cflow.expr();
-              }
-
-              lines.push(ETry(flow.expr(), catches).p());
-            }
-            jumpIn(newLines);
+          if(!haveCatchAll(catches)){ // catch all
+            catches.push({name:ERROR_NAME, type:TPath({name:'Dynamic', pack:[], params:[]}), expr:
+              ebCall(ERROR.p())
+            });
           }
+
+          for(thr in flow.repsThrow){
+            switch(thr.expr){
+              case EThrow(e): thr.expr = ECall(afterTryI.p(), [e]);
+              default:
+              //~ default: throw 'shouldnt happen';
+            }
+          }
+
+          if(flow.async){
+            for(cat in catches){
+              var cflow = mkFlow(cat.expr);
+              cflow.finalize(afterCatchI.p().call([NULL.p()]).p());
+              //~ cflow.finalize(EBinop(OpAssign, ERROR.p(), NULL.p()).p());
+              cat.expr = cflow.expr();
+            }
+
+            lines.push(EFunction(afterTryN, {
+              args: [{name:ERROR_NAME, type:null, opt:false}],
+              expr: EIf(
+                EBinop(OpNotEq, ERROR.p(), NULL.p()).p(),
+                ETry( EThrow(ERROR.p()).p(), catches ).p(),
+                ECall(afterCatchI.p(), [NULL.p()]).p()
+              ).p(),
+              ret: null,
+              params: [],
+            }).p());
+            if(flow.open) flow.lines.push(afterTryI.p().call([NULL.p()]).p());
+            for(nline in flow.root) lines.push(nline);
+          }
+          else{
+            for(cat in catches){
+              var cflow = mkFlow(cat.expr);
+              //~ cflow.finalize(afterTryI.p().call([NULL.p()]).p());
+              cflow.finalize(afterCatchI.p().call([NULL.p()]).p());
+              cat.expr = cflow.expr();
+            }
+
+            lines.push(ETry(flow.expr(), catches).p());
+          }
+          jumpIn(newLines);
+        }
 
         default: lines.push(line);
       }
