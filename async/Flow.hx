@@ -317,7 +317,7 @@ class Flow{
           }
         }
         lines.push(EVars(vars).p()); //TODO position
-        lines.push(singleVar(parallelCounterN, EConst(CInt(''+parallels.length)).p()));
+        lines.push(singleVar(parallelCounterN, EConst(CInt(''+parallels.length)).p()).p());
 
         var newLines = [];
         lines.push(makeErrorFun(afterParallelN,

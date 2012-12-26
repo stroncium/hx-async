@@ -1,7 +1,7 @@
 # async - Asynchronous programming in HaXe made easy.
 
 ## Beta version
-.
+
 The aim of the project is to use the power of HaXe macro system to make complex asynchronous operations easier to write and read.
 
 The main concept is to look at seemingly synchronous code with special markings and convert it to asynchronous code with the same overall flow as we seen in synchronous code (in compile time).

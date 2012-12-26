@@ -3,3 +3,4 @@
 -js test.js
 #--dce full
 -D async_readable
+-D async_trace_converted

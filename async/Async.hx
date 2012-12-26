@@ -32,7 +32,7 @@ class Async{
       var cbArg = fun.args[fun.args.length - 1];
       var newexpr = Flow.syncToAsync(cbArg, fun.expr);
       fun.expr = newexpr;
-      trace(fun.expr.dump());
+      #if async_trace_converted trace(fun.expr.dump()); #end
       //~ fun.expr = EUntyped(newexpr).pos(fun.expr.pos);
       //~ throw 'lol';
     }
