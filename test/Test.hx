@@ -1,9 +1,14 @@
 import haxe.macro.Expr;
+import async.Async;
 
 class Test implements async.Build{
 
   @async
   static function asynchronous(int:Int, string:String, MARKER_cb){
+    async(Async.block({
+      async(delay(100));
+    })());
+//~
     var i = 3;
     while(i --> 0) async(delay(10));
 
@@ -23,7 +28,7 @@ class Test implements async.Build{
       async(delay(100));
       trace('realized we dont care about this error');
     }
-    //other errors will go to callback
+    //other errors would have gone to callback
 
     try{
       async(throwAsyncErrorIfTrue(false, 'error 1'));
@@ -34,8 +39,12 @@ class Test implements async.Build{
     }
 
     parallel( // direct assigns in parallel are not supported yet
-      v1 < asyncGet(string),
-      v2 < asyncGet(string),
+      v1 = asyncGet(string),
+      v2 < {
+        async(v = asyncGet(string));
+        async(delay(200));
+        return 'another '+v;
+      },
       delay(100)
     );
     trace('we have '+v1+' and '+v2+', at least 100 ms passed');
@@ -52,7 +61,6 @@ class Test implements async.Build{
         case 4:
           trace('4 is enough');
           break;
-        //~ default:
       }
       trace('done with '+i);
     }
@@ -98,10 +106,6 @@ class Test implements async.Build{
   }
 
   public static function main(){
-    var it = 0...1;
-    trace(it.hasNext());
-    var f = it.hasNext;
-    trace(f());
     asynchronous(10, 'string', function(err, v1:Int, v2:String){
       if(err != null){
         trace('Error: '+err);

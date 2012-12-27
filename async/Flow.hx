@@ -11,29 +11,71 @@ import async.tools.Macro;
 using Lambda;
 
 class Flow{
-
   static var counter:Int;
+  static var savedErrors:Array<Error>;
 
-  static inline function gen(){
-    return StringTools.hex(counter++);
+  static inline function assert(v, msg = 'shouldnt happen') if(!v) throw msg
+
+
+
+  static inline function gen(str = ''){
+    return PREFIX+str+StringTools.hex(counter++);
   }
 
-  public static function syncToAsync(cbArg:FunctionArg, e:Expr){
-    counter = 0;
-    var flow = new Flow(null).process(e);
-    if(flow.open) flow.finalize();
 
-    var cb = cbArg.name.ident().pos(e.pos);
-    var returns = null, returnsLength = 0;
+  static function onGeneratePrintErrors(_){
+    for(error in savedErrors){
+      Context.error(error.message, error.pos);
+    }
+
+  }
+
+  static inline function error(expr:Expr, msg = 'Error (not clarified)', stop = false){
+    if(stop){
+      throw new Error(msg, expr.pos);
+    }
+    else{
+      if(savedErrors == null){
+        savedErrors = [];
+        Context.onGenerate(onGeneratePrintErrors);
+      }
+      savedErrors.push(new Error(msg, expr.pos));
+    }
+  }
+
+  public static function convertFunction(fun:Function){
+    if(fun.args.length == 0) fun.args.push({name:'cb', type:null, opt:false});
+    var cbArg = fun.args[fun.args.length - 1];
+    counter = 0;
+    var returns = null;
     if(cbArg.type != null){
       switch(cbArg.type){
         case TFunction(args, _):
           returns = args.slice(1);
-          returnsLength = returns.length;
         default:
       }
     }
-    else if(flow.repsReturn.length > 0){
+    fun.expr = convertBlock(cbArg.name, returns, fun.expr);
+  }
+
+  public static function blockToFunction(e:Expr){
+    var pos = e.pos;
+    var cbName = 'cb';
+    return EFunction(null, {
+      args: [{name:cbName, opt:false, type:null}],
+      ret: null,
+      expr: convertBlock(cbName, null, e),
+      params: [],
+    }).pos(pos);
+  }
+
+  static function convertBlock(cbName:String, returns:Array<ComplexType>, e:Expr){
+    var flow = new Flow(null).process(e);
+    if(flow.open) flow.finalize();
+
+    var cb = cbName.ident().pos(e.pos);
+    var returnsLength = returns == null ? 0 : returns.length;
+    if(returns == null && flow.repsReturn.length > 0){
       for(ret in flow.repsReturn){
         switch(ret.expr){
           case EReturn(sub):
@@ -98,14 +140,16 @@ class Flow{
       }
     }
 
-    return EBlock(flow.root).pos(e.pos);
+
+    var ret = EBlock(flow.root).pos(e.pos);
     //~ return switch(newstate.root.length){
       //~ case 0: [].block().pos(e.pos);
       //~ case 1: newstate.root[0];
       //~ default: newstate.root.block().pos(e.pos);
     //~ };
+    #if async_trace_converted trace(ret.pos+'\n'+ret.dump()); #end
+    return ret;
   }
-
 
   static inline var PREFIX = #if async_readable '_' #else '__' #end;
   static inline var ASYNC_CALL_FUN = 'async';
@@ -203,37 +247,11 @@ class Flow{
     static inline var NO_ERROR = PREFIX+'';
   #end
 
-  static var ASYNC_CALL;
-  static var PARALLEL_CALL;
-  static var ASYNC_PASSTHROUGH;
-  static var LOOP;
-  static var AFTER_LOOP;
-  static var AFTER_BRANCH;
-  static var ERROR:ExprDef;
-  static var CALLBACK;
-
-  static var NULL:ExprDef;
-  static var ZERO:ExprDef;
-  static var TRUE:ExprDef;
-  static var FALSE:ExprDef;
-
-  static function __init__(){
-    NULL = 'null'.ident();
-    ZERO = EConst(CInt('0'));
-    TRUE = 'true'.ident();
-    FALSE = 'false'.ident();
-
-    ASYNC_CALL = ASYNC_CALL_FUN.ident();
-    PARALLEL_CALL = PARALLEL_CALL_FUN.ident();
-    ASYNC_PASSTHROUGH = ASYNC_PASSTHROUGH_FUN.ident();
-    LOOP = LOOP_FUN.ident();
-    AFTER_LOOP = AFTER_LOOP_FUN.ident();
-    AFTER_BRANCH = AFTER_BRANCH_FUN.ident();
-    ERROR = ERROR_NAME.ident();
-    CALLBACK = CALLBACK_FUN.ident();
-
-  }
-
+  static var NULL:ExprDef = 'null'.ident();
+  static var ZERO:ExprDef = EConst(CInt('0'));
+  static var TRUE:ExprDef = 'true'.ident();
+  static var FALSE:ExprDef = 'false'.ident();
+  static var ERROR:ExprDef = ERROR_NAME.ident();
 
   var root: Array<Expr>;
   var lines: Array<Expr>;
@@ -263,7 +281,8 @@ class Flow{
             assigns.push(vals[0]);
           }
           else{
-            throw 'error';
+            error(par, 'Wrong direct assign format, only one inner expression required.');
+            ident = '_';
           }
         default:
           ident = par.extractIdent();
@@ -299,20 +318,28 @@ class Flow{
 
   inline function processParallelCall(parallels:Array<{ids:Array<String>, fun:Expr}>){
     switch(parallels.length){
-      //~ case 0: //TODO show warning
+      case 0:
+        //TODO show warning
       //~ case 1: //TODO process as single async call
       default:
         //TODO check our vars dont overlap with what we use in calls
-        var parallelCounterN = PARALLEL_COUNTER+gen(), afterParallelN = AFTER_PARALLEL+gen();
+        var parallelCounterN = gen('parallelCounter'), afterParallelN = gen('afterParallel');
         var parallelCounterI = parallelCounterN.ident(), afterParallelI = afterParallelN.ident();
         var vars = [];
         var idsUsed = new Hash();
         for(par in parallels){
+          switch(par.fun.expr){
+            case EBlock(_):
+              par.fun = ECall(blockToFunction(par.fun), []).pos(par.fun.pos);
+            default:
+          }
           for(id in par.ids){
-            if(idsUsed.exists(id)){
-              throw 'double id'; //TODO
-            }
-            else{
+            if(id != '_'){
+              assert(id != null);
+              if(idsUsed.exists(id)){
+                error(par.fun, 'The id \''+id+'\' used more than one time in one parallel(...).');
+                id = '_';
+              }
               idsUsed.set(id, true);
               vars.push({name:id, expr:NULL.p(), type:null});
             }
@@ -336,13 +363,6 @@ class Flow{
           ]).p()
         ));
         for(par in parallels){
-          var lcbArgs = [{ name: ERROR_NAME, type: null, opt: false, value: null }];
-          var lcbLines = [];
-          for(id in par.ids){
-            lcbArgs.push({ name: '_'+id, type: null, opt: false, value: null });
-            lcbLines.push(EBinop(OpAssign, id.ident().p(), ('_'+id).ident().p()).p());
-          }
-          lcbLines.push(afterParallelI.p().call([ERROR.p()]).p());
           var lcb;
           if(par.ids.length == 0){
             lcb = afterParallelI.p();
@@ -351,10 +371,16 @@ class Flow{
             var lcbArgs = [{ name: ERROR_NAME, type: null, opt: false, value: null }];
             var lcbLines = [];
             for(id in par.ids){
-              lcbArgs.push({ name: '_'+id, type: null, opt: false, value: null });
-              lcbLines.push(EBinop(OpAssign, id.ident().p(), ('_'+id).ident().p()).p());
+              if(id == '_'){
+                lcbArgs.push({ name: '_', type: null, opt: false, value: null });
+              }
+              else{
+                var genId = gen(id);
+                lcbArgs.push({ name: genId, type: null, opt: false, value: null });
+                lcbLines.push(EBinop(OpAssign, id.ident().p(), genId.ident().p()).p());
+              }
             }
-            lcbLines.push(ECall(afterParallelI.p(), [ERROR.p()]).p());
+            lcbLines.push(afterParallelI.p().call([ERROR.p()]).p());
             lcb = EFunction(null, {
               args: lcbArgs,
               expr: EBlock(lcbLines).p(),
@@ -366,7 +392,8 @@ class Flow{
             case ECall(_, args):
               args.push(lcb);
               lines.push(par.fun);
-            default: throw 'not a function call';
+            default:
+              error(par.fun, 'Either function call or block required.');
           }
         }
         lines = newLines;
@@ -397,24 +424,6 @@ class Flow{
     lines = newLines;
     oldPos.set();
   }
-
-  inline function extractRealFunc(args:Array<Expr>){
-        var idx = args.length-1;
-        var arg = args[idx];
-        return switch(arg.expr){
-          case EBinop(op, realArg, fun):
-            if(op == OpLte){ //1+ return
-              args[idx] = realArg;
-              fun;
-            }
-            else{
-              throw 'unknown shit(bad op)';
-              null;
-            }
-          default: // no returns
-            args.pop();
-        }
-      }
 
   inline function mkFlow(isrc:Expr):Flow{
     var flow = new Flow(this);
@@ -458,17 +467,6 @@ class Flow{
     return EBlock(root).p();
   }
 
-  inline function replaceLoop(ebreak, econt){
-    for(e in repsBreak) e.expr = ebreak;
-    for(e in repsContinue) e.expr = econt;
-  }
-
-  inline function replaceReturn(ereturn, ethrow){
-    for(e in repsReturn) e.expr = ereturn;
-    for(e in repsThrow) e.expr = ethrow;
-  }
-
-
   static inline function singleVar(name, val){
     return EVars([{name:name, type:null, expr:val}]);
   }
@@ -485,7 +483,6 @@ class Flow{
       var line = src[pos++];
       line.pos.set();
       switch(line.expr){
-
         case ECall(func, args):{
           var id = func.extractIdent();
           if(id == ASYNC_CALL_FUN && args.length != 0){
@@ -496,26 +493,31 @@ class Flow{
               switch(arg.expr){
                 case EBinop(op, left, right):
                   switch(op){
-                    case OpLt, OpLte:
+                    case OpLt, OpLte, OpAssign:
                       ids.push(left);
                       calls.push({ids:ids, fun:right});
                       ids = [];
                     default:
-                      throw 'bad op: '+op;
+                      error(arg, "Use '=', '<', or '<='.");
+                      ids = [];
                   }
                 case ECall(_,_):
                   calls.push({ids:[], fun:arg});
-                  ids = [];
+                  if(ids.length > 0){
+                    error(arg, 'Unused identifiers.');
+                    ids = [];
+                  }
                 case EConst(_):
                   ids.push(arg);
                 default:
-                  throw 'error';
+                  error(arg, 'Unsupported expression.');
               }
             }
+            if(ids.length > 0) error(line, 'Unused identifiers.');
             for(call in calls){
               switch(call.fun.expr){
                 case ECall(_, callArgs): processAsyncCall(call.fun, callArgs, call.ids);
-                default: throw 'not a function call';
+                default: error(call.fun, 'Function call required.');
               }
             }
           }
@@ -526,22 +528,23 @@ class Flow{
               switch(arg.expr){
                 case EBinop(op, left, right):
                   switch(op){
-                    case OpLte, OpLt:
+                    case OpLte, OpLt, OpAssign:
                       ids.push(left.extractIdent());
                       parallels.push({ids:ids, fun:right});
                       ids = [];
-                    default:
-                      throw 'bad op: '+op;
+                    default: error(arg, "Use '=', '<', or '<='.");
                   }
-                case ECall(_,_):
+                case ECall(_,_), EBlock(_):
+                  if(ids.length > 0) error(arg, 'Unused identifiers.');
                   parallels.push({ids:[], fun:arg});
                   ids = [];
-                case EConst(_):
+               case EConst(_):
                   ids.push(arg.extractIdent());
                 default:
-                  throw 'error';
+                  error(arg, 'Unsupported expression.');
               }
             }
+            if(ids.length > 0) error(line, 'Unused identifiers.');
             processParallelCall(parallels);
           }
 /*
@@ -564,7 +567,6 @@ class Flow{
 */
           else lines.push(line);
         }
-
         case EReturn(_):{
           lines.push(line);
           repsReturn.push(line);
@@ -572,7 +574,6 @@ class Flow{
           run = false;
           break;
         }
-
         case EFor(iter, expr):{
           var flow = mkLoop(expr);
           if(!flow.async && flow.open){
@@ -580,7 +581,7 @@ class Flow{
           }
           else{
             async = true;
-            var loopN = LOOP_FUN+gen(), afterLoopN = AFTER_LOOP_FUN+gen(), iteratorN = ITERATOR+gen();
+            var loopN = gen('loop'), afterLoopN = gen('afterLoop'), iteratorN = gen('iter');
             var loopI = loopN.ident(), afterLoopI = afterLoopN.ident(), iteratorI = iteratorN.ident();
             var loopCall = loopI.p().call([]);
             var afterLoopCall = afterLoopI.p().call([]);
@@ -592,7 +593,7 @@ class Flow{
               case EIn(idexpr, _it):
                 it = _it;
                 id = idexpr.extractIdent();
-              default: throw 'error';
+              default: error(line, 'Invalid for cycle.', true);
             }
             var afterLoopLines = [];
             var afterLoopDefinition = makeNoargFun(afterLoopN, EBlock(afterLoopLines).p());
@@ -612,7 +613,6 @@ class Flow{
             jumpIn(afterLoopLines);
           }
         }
-
         case EWhile(econd, expr, normal):{
           var flow = mkLoop(expr);
           if(!flow.async && flow.open){
@@ -620,7 +620,7 @@ class Flow{
           }
           else{
             async = true;
-            var loopN = LOOP_FUN+gen(), afterLoopN = AFTER_LOOP_FUN+gen();
+            var loopN = gen('loop'), afterLoopN = gen('afterLoop');
             var loopI = loopN.ident(), afterLoopI = afterLoopN.ident();
             var loopCall = loopI.p().call([]);
             var afterLoopLines = [];
@@ -653,7 +653,6 @@ class Flow{
             jumpIn(afterLoopLines);
           }
         }
-
         case EBreak:{
           repsBreak.push(line);
           lines.push(line);
@@ -661,7 +660,6 @@ class Flow{
           run = false;
           break;
         }
-
         case EContinue:{
           repsContinue.push(line);
           lines.push(line);
@@ -669,7 +667,6 @@ class Flow{
           run = false;
           break;
         }
-
         case EIf(econd, etrue, efalse):{
           var ftrue = mkFlow(etrue);
           var lasync = ftrue.async || !ftrue.open;
@@ -679,7 +676,7 @@ class Flow{
             lasync = lasync || ffalse.async || !ffalse.open;
           }
           if(lasync){
-            var afterIfN = AFTER_IF+gen();
+            var afterIfN = gen('afterIf');
             var afterIfI = afterIfN.ident();
             var afterIfLines = [];
             var afterIfCall = afterIfI.p().call([]).p();
@@ -703,7 +700,6 @@ class Flow{
             break;
           }
         }
-
         case EThrow(_):{
           repsThrow.push(line);
           lines.push(line);
@@ -711,11 +707,7 @@ class Flow{
           run = false;
           break;
         }
-
         case ESwitch(e, cases, edef):{
-          //~ //var values : Array<Expr>;
-          //~ //@:optional var guard : Null<Expr>;
-          //~ //var expr: Expr;
           var trees = [];
           for(cas in cases){
             trees.push(cas.expr);
@@ -729,13 +721,12 @@ class Flow{
             if(flow.async || flow.closed()) asyncs++;
             states.push(flow);
           });
-          if(asyncs == 0){
+          if(asyncs == 0 && edef != null){
             lines.push(line);
           }
           else{
-            //~ if(edef == null) throw 'not implemented switch with no default';
             async = true;
-            var afterSwitchN = AFTER_SWITCH+gen();
+            var afterSwitchN = gen('afterSwitch');
             var afterSwitchI = afterSwitchN.ident();
             var newLines = [];
             lines.push(makeNoargFun(afterSwitchN, EBlock(newLines).p()));
@@ -744,15 +735,14 @@ class Flow{
             }
             var i = cases.length;
             while(i --> 0){
-              cases[i].expr = EBlock(states[i].root).p();
+              cases[i].expr = states[i].expr();
             }
-            lines.push(ESwitch(e, cases, edef == null ? afterSwitchI.p().call([]).p() : EBlock(states[states.length - 1].root).p()).p());
+            lines.push(ESwitch(e, cases, edef == null ? afterSwitchI.p().call([]).p() : states[states.length - 1].expr()).p());
             lines = newLines;
           }
         }
-
         case ETry(expr, catches):{
-          var afterTryN = AFTER_TRY+gen(), afterCatchN = AFTER_CATCH+gen();
+          var afterTryN = gen('afterTry'), afterCatchN = gen('afterCatch');
           var afterTryI = afterTryN.ident(), afterCatchI = afterCatchN.ident();
           var prevPos = Macro.getPos();
           var flow = mkTry(expr);
@@ -762,7 +752,7 @@ class Flow{
           var newLines = [];
           lines.push(makeErrorFun(afterCatchN, newLines, ebCall(ERROR.p())));
 
-          if(!haveCatchAll(catches)){ // catch all
+          if(!haveCatchAll(catches)){
             catches.push({name:ERROR_NAME, type:TPath({name:'Dynamic', pack:[], params:[]}), expr:
               ebCall(ERROR.p())
             });
@@ -809,7 +799,6 @@ class Flow{
           }
           jumpIn(newLines);
         }
-
         default: lines.push(line);
       }
     }
