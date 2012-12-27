@@ -22,99 +22,100 @@ The library isn't currently released on haxelib.
   In the first function we think of everything like it is synchronous, but most parts are not.
   Later functions are just for the sake of completeness.
 
-    @async
-    static function asynchronous(int:Int, string:String, MARKER_cb){
-      async(Async.block({
+``` haxe
+@async
+static function asynchronous(int:Int, string:String, MARKER_cb){
+  async(Async.block({
+    async(delay(100));
+  })());
+
+  var i = 3;
+  while(i --> 0) async(delay(10));
+
+  var result = [null, null];
+  async([result[0]] < asyncGet(string)); //direct assign
+  async([result[1]] < asyncGet(string)); //direct assign
+  trace('array: '+result);
+
+  async(a, b < asyncGet2(string, string));
+  trace('got '+a+' and '+b);
+  try{
+    syncThrow(); // synchronous as hell
+  }
+  catch(e:String){
+    trace('got error: '+e);
+    trace('thinking...');
+    async(delay(100));
+    trace('realized we dont care about this error');
+  }
+  //other errors would have gone to callback
+
+  try{
+    async(throwAsyncErrorIfTrue(false, 'error 1'));
+    async(throwAsyncErrorIfTrue(true, 'error 2'));
+  }
+  catch(e:String){
+    trace('error, just as we expected: '+e);
+  }
+
+  parallel( // direct assigns in parallel are not supported yet
+    v1 = asyncGet(string),
+    v2 < {
+      async(v = asyncGet(string));
+      async(delay(200));
+      return 'another '+v;
+    },
+    delay(100)
+  );
+  trace('we have '+v1+' and '+v2+', at least 100 ms passed');
+
+  for(i in 0...10){
+    trace('it\'s '+i);
+    switch(i){
+      case 2:
+        trace('2 always takes longer');
         async(delay(100));
-      })());
-
-      var i = 3;
-      while(i --> 0) async(delay(10));
-
-      var result = [null, null];
-      async([result[0]] < asyncGet(string)); //direct assign
-      async([result[1]] < asyncGet(string)); //direct assign
-      trace('array: '+result);
-
-      async(a, b < asyncGet2(string, string));
-      trace('got '+a+' and '+b);
-      try{
-        syncThrow(); // synchronous as hell
-      }
-      catch(e:String){
-        trace('got error: '+e);
-        trace('thinking...');
-        async(delay(100));
-        trace('realized we dont care about this error');
-      }
-      //other errors would have gone to callback
-
-      try{
-        async(throwAsyncErrorIfTrue(false, 'error 1'));
-        async(throwAsyncErrorIfTrue(true, 'error 2'));
-      }
-      catch(e:String){
-        trace('error, just as we expected: '+e);
-      }
-
-      parallel( // direct assigns in parallel are not supported yet
-        v1 = asyncGet(string),
-        v2 < {
-          async(v = asyncGet(string));
-          async(delay(200));
-          return 'another '+v;
-        },
-        delay(100)
-      );
-      trace('we have '+v1+' and '+v2+', at least 100 ms passed');
-
-      for(i in 0...10){
-        trace('it\'s '+i);
-        switch(i){
-          case 2:
-            trace('2 always takes longer');
-            async(delay(100));
-          case 3:
-            trace('don\'t like number 3');
-            continue;
-          case 4:
-            trace('4 is enough');
-            break;
-        }
-        trace('done with '+i);
-      }
-      if(result[0] == string){ //which is always true in our case
-        return many(222, 'another string');
-      }
-      return many(111, 'string');
+      case 3:
+        trace('don\'t like number 3');
+        continue;
+      case 4:
+        trace('4 is enough');
+        break;
     }
+    trace('done with '+i);
+  }
+  if(result[0] == string){ //which is always true in our case
+    return many(222, 'another string');
+  }
+  return many(111, 'string');
+}
 
-    @async
-    static function asyncGet<T>(val:T, cb){
-      return val;
-    }
+@async
+static function asyncGet<T>(val:T, cb){
+  return val;
+}
 
-    //freely integrates with normal asynchronous functions
-    static function asyncGet2<T1, T2>(v1:T1, v2:T2, cb){
-      cb(null, v1, v2);
-    }
+//freely integrates with normal asynchronous functions
+static function asyncGet2<T1, T2>(v1:T1, v2:T2, cb){
+  cb(null, v1, v2);
+}
 
-    @async
-    static function throwAsyncErrorIfTrue(bool, err, cb){
-      if(bool) throw err;
-    }
+@async
+static function throwAsyncErrorIfTrue(bool, err, cb){
+  if(bool) throw err;
+}
 
-    static function syncThrow(){
-      trace('random calculations throw exception');
-      throw 'too hard to calculate';
-    }
-
+static function syncThrow(){
+  trace('random calculations throw exception');
+  throw 'too hard to calculate';
+}
+```
 
 ## Features / Done
 
   + Converting is rebuilding seemingly synchronous code to asynchronous.
 
-  + Every class implementing **`async.Build`** interface will be automatically processed, which means every function of such class with **@async** metadata will be converted.
+  + Every class implementing **`async.Build`** interface will be automatically processed, which means every function of such class with **`@async`** metadata will be converted.
 
   + Function can be implicitly converted by passing is to **`async.Async.it()`** macro.
 
@@ -156,7 +157,7 @@ The library isn't currently released on haxelib.
         Calls can't use variable named the same of any variable `parallel(...)` construct will pass results to unless in deeper scopes.
         That means `var a = 123; parallel(a <= getA(a));` will result in error which won't be detected.
 
-    - **DISABLED** **asyncr(<arguments>)** calls - are treated the same way as **async** calls, but callback arguments are used as is.
+    - **DISABLED** `asyncr(<arguments>)` calls - are treated the same way as **async** calls, but callback arguments are used as is.
 
     - **`do{...}while(...); while(...){...}; for(<identifier> in <iterator>){...}`** loops
 
@@ -181,18 +182,17 @@ The library isn't currently released on haxelib.
 
       `return many(value1, value2);` is used to return multiple values.
 
-    - **`try{...}catch(...){...}`**
+    - **`try{...}catch(...){...}`** are converted.
 
-      Should work, asynchronously.
-      If there is no asynchronous constructions inside try expression(throw doesnt count as aync construction for that case)
+      If there is no asynchronous constructions inside try expression(throw doesnt count as async construction for that case)
       the expression will be left synchronous, which allows to use functions throwing synchronous exceptions,
-      however throws in catch expressions will be processed accroding to it's context, sync inside try, async in functions.
+      however catch expressions will be always converted to asynchronous (for the sake of simplifying flow management, later it may be optimized).
 
-  + **switch** constructions work.
+  + **`switch{...}`** constructions are converted.
 
   + **Mission control**: if there is no return in your code - it will be implicitly added.
 
-    All in all, there is no way @async function will never call it's callback or call it more than one time if:
+    All in all, there is no way `@async` function will never call it's callback or call it more than one time if:
       - all the asynchronous function it uses always call their callbacks, do it only once and never *throw* (synchronous) errors.
       - there is no implicit calls to callback
 
