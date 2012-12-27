@@ -17,13 +17,17 @@ The library isn't currently released on haxelib.
 
 ## Example (same code as in test/)
 
-    //class should implement async.Build
-    //compiling should be done with -lib async
+  Class should implement `async.Build`, compiling should be done with `-lib async`.
 
-    //in this function we think of everything like it is synchronous
-    //but most parts are not
+  In the first function we think of everything like it is synchronous, but most parts are not.
+  Later functions are just for the sake of completeness.
+
     @async
     static function asynchronous(int:Int, string:String, MARKER_cb){
+      async(Async.block({
+        async(delay(100));
+      })());
+
       var i = 3;
       while(i --> 0) async(delay(10));
 
@@ -43,7 +47,7 @@ The library isn't currently released on haxelib.
         async(delay(100));
         trace('realized we dont care about this error');
       }
-      //other errors will go to callback
+      //other errors would have gone to callback
 
       try{
         async(throwAsyncErrorIfTrue(false, 'error 1'));
@@ -54,8 +58,12 @@ The library isn't currently released on haxelib.
       }
 
       parallel( // direct assigns in parallel are not supported yet
-        v1 < asyncGet(string),
-        v2 < asyncGet(string),
+        v1 = asyncGet(string),
+        v2 < {
+          async(v = asyncGet(string));
+          async(delay(200));
+          return 'another '+v;
+        },
         delay(100)
       );
       trace('we have '+v1+' and '+v2+', at least 100 ms passed');
@@ -72,7 +80,6 @@ The library isn't currently released on haxelib.
           case 4:
             trace('4 is enough');
             break;
-          //~ default:
         }
         trace('done with '+i);
       }
@@ -103,17 +110,19 @@ The library isn't currently released on haxelib.
     }
 
 
-
 ## Features / Done
 
   + Converting is rebuilding seemingly synchronous code to asynchronous.
 
-  + Every class implementing **async.Build** interface will be automatically processed, which means every function of such class with **@async** metadata will be converted.
+  + Every class implementing **`async.Build`** interface will be automatically processed, which means every function of such class with **@async** metadata will be converted.
 
-  + Function can be implicitly converted by passing is to **async.Async.it()** macro.
+  + Function can be implicitly converted by passing is to **`async.Async.it()`** macro.
+
+  + Block of code can be converted to anonymous function of type `(Dynamic->Void)->Void` by using `async.Async.block()` macro.
 
   + Along the code convertion, the following will be processed and converted to asynchronous:
-    - **async(<comma-separated list of calls>)** - the main construct
+
+    - **`async(<comma-separated list of calls>)`** - the main construct
 
       Each call have form of
         `<comma-separated list of identifiers> <= <function>(<arguments without callback>))`
@@ -136,50 +145,49 @@ The library isn't currently released on haxelib.
 
       `async(a <= getA(), getB)()); /*some code*/` ⇒ `getA(function(error, a){ getB(function(error){/*some code*/ }); };`.
 
-    - **parallel(<comma-separated list of calls>)** - construct to handle parallel execution
+    - **`parallel(<comma-separated list of calls>)`** - construct to handle parallel execution
 
-        Calls have the same form as calls passed to async(...) but are executed in parallel.
+        Calls have the same form as calls passed to `async(...)` but are executed in parallel.
+
+        ...except you can pass code block instead of function andd it will be converted to `(Dynamic->Void)->Void`
 
         First error returned from any of calls will be passed to higher level.
 
-        Calls can't use variable named the same of any variable parallel(...) construct will pass results to unless in deeper scopes.
+        Calls can't use variable named the same of any variable `parallel(...)` construct will pass results to unless in deeper scopes.
         That means `var a = 123; parallel(a <= getA(a));` will result in error which won't be detected.
 
     - **DISABLED** **asyncr(<arguments>)** calls - are treated the same way as **async** calls, but callback arguments are used as is.
 
-    - **do**, **while**, **for** loops
+    - **`do`**, **`while`**, **`for`** loops
 
       The condition should be fully synchronous(in it's context)
       The expression is processed the same way as whole function.
       If expression doesn't contain any parts which need conversion, the code is left as is.
 
-      **continue** and **break** expressions will be processed and exactly what you expect them to do.
+      **`continue`** and **`break`** expressions will be processed and do exactly what you expect them to do.
 
-      For for loops the iterator should be explicitly specified ( `v in [1,2,3]` won't do).
+      For for loops the iterator should be explicitly specified ( `v in [1,2,3]` won't do, but `v in [1,2,3].iterator()` will).
 
-      Some cases can be handled badly, needs more testing.
-
-    - **if** conditions
+    - **`if(...){...}else{...}`** conditions
 
       The condition should be fully synchronous(in it's context).
       The expression is processed the same way as whole function.
       If expression doesn't contain any parts which need conversion, the code is left as is.
 
-    - **throw** - is replaced by calling function callback with error.
+    - **`throw`** - is replaced by calling function callback with error.
 
-    - **return** - is replaced by calling function callback with null and proper arguments.
-      To return single value(except null for error) the normal *return value;* construction is used.
-      To return multiple arguments *return many(value1, value2);* construction is used.
+    - **`return;`**,  **`return val;`**, **`return many(val1, val2, ...)`** - is replaced by calling function callback with null and proper arguments.
 
-    - **try{...}catch(...){...}**
+      `return many(value1, value2);` is used to return multiple values.
 
-      Should work, asynchronously. But needs better testing.
+    - **`try{...}catch(...){...}`**
+
+      Should work, asynchronously.
       If there is no asynchronous constructions inside try expression(throw doesnt count as aync construction for that case)
       the expression will be left synchronous, which allows to use functions throwing synchronous exceptions,
       however throws in catch expressions will be processed accroding to it's context, sync inside try, async in functions.
 
-  + **switch**es
-      They work.
+  + **switch** constructions work.
 
   + **Mission control**: if there is no return in your code - it will be implicitly added.
 
@@ -195,18 +203,14 @@ The library isn't currently released on haxelib.
 
   + Other
 
-    Use `-D async_readable` comilation flag to make async code more readable.
+    Use `-D async_readable` compilation flag to make async code more readable.
 
 
 ## ToDo
   + parallel(...) should support direct assigns, just as async(...)
-  + //TODO in code
   + testing, testing, testing (unit?)
-  + code samples should be added to this file
 
 ## Further improvements
   + check source code mapping, it may be broken in some cases
-  + better coder mistake detection
-  + more parallel execution options
   + enriching errors with stacktrace-like information
   + some code can be simplified, amount of calls reduced (functions which just check error and call next function which will also check for same errors)

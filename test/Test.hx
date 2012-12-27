@@ -8,7 +8,7 @@ class Test implements async.Build{
     async(Async.block({
       async(delay(100));
     })());
-//~
+
     var i = 3;
     while(i --> 0) async(delay(10));
 
