@@ -90,17 +90,10 @@ class Test implements async.Build{
     throw 'too hard to calculate';
   }
 
-  static inline function log(txt:String){
-    trace(txt);
-  }
-
-  static inline function doError(need, cb){
-    var _need = need;
-    cb(_need ? 'planned error' : null);
-  }
   static inline function delay(ms:Int, cb){
     platformDelay(ms, function(){ log(ms+' passed'); cb(null); });
   }
+
   static inline function delayGet(ms:Int, val:Dynamic, cb){
     platformDelay(ms, function(){ log(ms+' passed, returning '+val); cb(null, val); });
   }
@@ -114,21 +107,9 @@ class Test implements async.Build{
         trace('finished: '+v1+', '+v2);
       }
     });
-    //~ asynchronous(function(err){
-      //~ if(err != null){
-        //~ trace('Error: '+err);
-      //~ }
-      //~ else{
-        //~ trace(' == finished');
-      //~ }
-    //~ });
   }
 
   static inline function platformDelay(ms:Int, fun){
-    #if cpp
-      fun();
-    #else
-      haxe.Timer.delay(fun, ms);
-    #end
+    #if cpp fun(); #else haxe.Timer.delay(fun, ms); 3end
   }
 }
