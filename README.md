@@ -158,15 +158,13 @@ The library isn't currently released on haxelib.
 
     - **DISABLED** **asyncr(<arguments>)** calls - are treated the same way as **async** calls, but callback arguments are used as is.
 
-    - **`do`**,
-      **`while`**,
-      **`for`** loops
+    - **`do{...}while(...); while(...){...}; for(<identifier> in <iterator>){...}`** loops
 
       The condition should be fully synchronous(in it's context)
       The expression is processed the same way as whole function.
       If expression doesn't contain any parts which need conversion, the code is left as is.
 
-      **`continue`** and **`break`** expressions will be processed and do exactly what you expect them to do.
+      **continue** and **break** expressions will be processed and do exactly what you expect them to do.
 
       For for loops the iterator should be explicitly specified ( `v in [1,2,3]` won't do, but `v in [1,2,3].iterator()` will).
 
@@ -176,11 +174,10 @@ The library isn't currently released on haxelib.
       The expression is processed the same way as whole function.
       If expression doesn't contain any parts which need conversion, the code is left as is.
 
-    - **`throw`** - is replaced by calling function callback with error.
+    - **`throw`** is replaced by calling function callback with error.
 
-    - **`return;`**,
-      **`return val;`**,
-      **`return many(val1, val2, ...)`** - is replaced by calling function callback with null and proper arguments.
+    - **`return; return val; return many(val1, val2, ...)`**
+      will be replaced by calling function callback with null and proper arguments.
 
       `return many(value1, value2);` is used to return multiple values.
 
