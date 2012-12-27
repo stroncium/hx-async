@@ -158,7 +158,9 @@ The library isn't currently released on haxelib.
 
     - **DISABLED** **asyncr(<arguments>)** calls - are treated the same way as **async** calls, but callback arguments are used as is.
 
-    - **`do`**, **`while`**, **`for`** loops
+    - **`do`**,
+      **`while`**,
+      **`for`** loops
 
       The condition should be fully synchronous(in it's context)
       The expression is processed the same way as whole function.
@@ -176,7 +178,9 @@ The library isn't currently released on haxelib.
 
     - **`throw`** - is replaced by calling function callback with error.
 
-    - **`return;`**,  **`return val;`**, **`return many(val1, val2, ...)`** - is replaced by calling function callback with null and proper arguments.
+    - **`return;`**,
+      **`return val;`**,
+      **`return many(val1, val2, ...)`** - is replaced by calling function callback with null and proper arguments.
 
       `return many(value1, value2);` is used to return multiple values.
 
