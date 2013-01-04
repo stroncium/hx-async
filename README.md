@@ -201,7 +201,7 @@ class Test implements async.Build{
         or
         `<function>(<arguments without callback>)` for functions which return pass only null/error to it's callback.
 
-      If identifier is an expression inclosed in square brackets, this expression will be directly assigned.
+      If assign expression is prefixed with `!`, such expression will be directly assigned, like `!array[index]`..
 
       Any error got from asynchronous functions called will be passed to main function callback.
 
@@ -211,7 +211,7 @@ class Test implements async.Build{
 
       `async(a <= getA()); /*some code*/` ⇒ `getA(function(error, a){ /*some code*/ })`
 
-      `async([a[0]] <= getA()); /*some code*/` ⇒ `getA(function(error, v1){ a[0] = v1; /*some code*/ })`
+      `async(!a[0] <= getA()); /*some code*/` ⇒ `getA(function(error, v1){ a[0] = v1; /*some code*/ })`
 
       note than you can't use 'v1' to access value, as the identifier is dynamically generated and is just an example.
 
