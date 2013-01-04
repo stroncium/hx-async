@@ -16,13 +16,9 @@ class Macro{
 
   public static inline function extractIdent(expr:Expr):String{
     return switch(expr.expr){
-      case EConst(ident):
-        switch(ident){
-          case CIdent(name): name;
-          default: null;
-        }
+      case EConst(CIdent(name)): name;
       default: null;
-    }
+    };
   }
 
 }

@@ -186,9 +186,9 @@ class Test implements async.Build{
 
   + Converting is rebuilding seemingly synchronous code to asynchronous.
 
-  + Every class implementing **`async.Build`** interface will be automatically processed, which means every function of such class with **`@async`** metadata will be converted.
+  + Every class implementing `async.Build` interface will be automatically processed, which means every function of such class with **`@async`** metadata will be converted.
 
-  + Function can be implicitly converted by passing is to **`async.Async.it()`** macro.
+  + Function can be implicitly converted by passing is to `async.Async.it()` macro.
 
   + Block of code can be converted to anonymous function of type `(Dynamic->Void)->Void` by using `async.Async.block()` macro.
 
