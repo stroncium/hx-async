@@ -4,7 +4,6 @@ import haxe.macro.Expr;
 import haxe.macro.Context;
 
 using async.tools.Macro;
-using async.tools.MacroDump;
 using async.tools.Various;
 import async.tools.Macro;
 
@@ -178,7 +177,7 @@ class Flow{
       //~ case 1: newstate.root[0];
       //~ default: newstate.root.block().pos(e.pos);
     //~ };
-    #if async_trace_converted trace(ret.pos+'\n'+ret.dump()); #end
+    #if async_trace_converted trace(ret.pos+'\n'+async.tools.MacroDump.dump(ret)); #end
     return ret;
   }
 
