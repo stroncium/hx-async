@@ -10,12 +10,15 @@ class Async{
         Flow.convertFunction(fun);
       default:
     }
+    Flow.printErrors();
     return e;
   }
 
   @:macro
   public static function block(e:Expr):Dynamic{
-    return Flow.blockToFunction(e);
+    var ret = Flow.blockToFunction(e);
+    Flow.printErrors();
+    return ret;
   }
 
   #if macro //
@@ -40,6 +43,7 @@ class Async{
         default:
       }
     }
+    Flow.printErrors();
     return buildFields;
   }
   #end

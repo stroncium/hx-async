@@ -28,22 +28,33 @@ import async.Async;
 
 class Test implements async.Build{
 
-  @async
-  static function asynchronous(int:Int, string:String, MARKER_cb){
+  @async static function test1(){
+    trace(' === TEST 1 === ');
     async(Async.block({
       async(delay(100));
     })());
+    async(a, b = asyncGet2('string', 'another string'));
+    trace('got '+a+' and '+b);
+  }
 
+  @async static function test2(){
+    trace(' === TEST 2 === ');
     var i = 3;
     while(i --> 0) async(delay(10));
+  }
 
+  @async static function test3(){
+    trace(' === TEST 3 === ');
     var result = [null, null];
-    async([result[0]] < asyncGet(string)); //direct assign
-    async([result[1]] < asyncGet(string)); //direct assign
+    async(
+      [result[0]] < asyncGet(string), //direct assign
+      [result[1]] < asyncGet(string) //direct assign
+    );
     trace('array: '+result);
+  }
 
-    async(a, b < asyncGet2(string, string));
-    trace('got '+a+' and '+b);
+  @async static function test4(){
+    trace(' === TEST 4 === ');
     try{
       syncThrow(); // synchronous as hell
     }
@@ -54,7 +65,10 @@ class Test implements async.Build{
       trace('realized we dont care about this error');
     }
     //other errors would have gone to callback
+  }
 
+  @async static function test5(){
+    trace(' === TEST 5 === ');
     try{
       async(throwAsyncErrorIfTrue(false, 'error 1'));
       async(throwAsyncErrorIfTrue(true, 'error 2'));
@@ -62,18 +76,24 @@ class Test implements async.Build{
     catch(e:String){
       trace('error, just as we expected: '+e);
     }
+  }
 
+  @async static function test6(){
+    trace(' === TEST 6 === ');
     parallel( // direct assigns in parallel are not supported yet
-      v1 = asyncGet(string),
-      v2 < {
-        async(v = asyncGet(string));
+      v1 = asyncGet('string'),
+      v2 = {
+        async(v = asyncGet('string'));
         async(delay(200));
         return 'another '+v;
       },
       delay(100)
     );
     trace('we have '+v1+' and '+v2+', at least 100 ms passed');
+  }
 
+  @async static function test7(){
+    trace(' === TEST 7 === ');
     for(i in 0...10){
       trace('it\'s '+i);
       switch(i){
@@ -89,25 +109,50 @@ class Test implements async.Build{
       }
       trace('done with '+i);
     }
-    if(result[0] == string){ //which is always true in our case
-      return many(222, 'another string');
-    }
-    return many(111, 'string');
   }
 
-  @async
-  static function asyncGet<T>(val:T, cb){
+  @async static function test8(){
+    trace(' === TEST 8 === ');
+    async(num, str = Async.block({
+      if(Math.random() < 2){
+        return many(222, 'another string');
+      }
+      return many(111, 'string');
+    })());
+    trace('we got '+num+' and '+str);
+  }
+
+  @async static function testsFinished(){
+    trace(' === TESTS FINISHED === ');
+  }
+
+  @async static function asynchronous(int:Int, string:String, MARKER_cb){
+    async(
+      test1(),
+      test2(),
+      test3(),
+      test4(),
+      test5(),
+      test6(),
+      test7(),
+      test8(),
+      testsFinished()
+    );
+  }
+
+
+  @async static function asyncGet<T>(val:T, cb){
     return val;
+  }
+
+
+  @async static function throwAsyncErrorIfTrue(bool, err, cb){
+    if(bool) throw err;
   }
 
   //freely integrates with normal asynchronous functions
   static function asyncGet2<T1, T2>(v1:T1, v2:T2, cb){
     cb(null, v1, v2);
-  }
-
-  @async
-  static function throwAsyncErrorIfTrue(bool, err, cb){
-    if(bool) throw err;
   }
 
   static function syncThrow(){
@@ -116,26 +161,23 @@ class Test implements async.Build{
   }
 
   static inline function delay(ms:Int, cb){
-    platformDelay(ms, function(){ log(ms+' passed'); cb(null); });
+    platformDelay(ms, function(){ trace(ms+' passed'); cb(null); });
   }
 
   static inline function delayGet(ms:Int, val:Dynamic, cb){
-    platformDelay(ms, function(){ log(ms+' passed, returning '+val); cb(null, val); });
+    platformDelay(ms, function(){ trace(ms+' passed, returning '+val); cb(null, val); });
   }
 
   public static function main(){
-    asynchronous(10, 'string', function(err, v1:Int, v2:String){
+    asynchronous(10, 'string', function(err){
       if(err != null){
         trace('Error: '+err);
-      }
-      else{
-        trace('finished: '+v1+', '+v2);
       }
     });
   }
 
   static inline function platformDelay(ms:Int, fun){
-    #if cpp fun(); #else haxe.Timer.delay(fun, ms); 3end
+    #if cpp fun(); #else haxe.Timer.delay(fun, ms); #end
   }
 }
 ```
