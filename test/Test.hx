@@ -22,8 +22,8 @@ class Test implements async.Build{
     trace(' === TEST 3 === ');
     var result = [null, null];
     async(
-      [result[0]] < asyncGet(string), //direct assign
-      [result[1]] < asyncGet(string) //direct assign
+      !result[0] = asyncGet('string'), //direct assign
+      !result[1] = asyncGet('string') //direct assign
     );
     trace('array: '+result);
   }

@@ -717,20 +717,24 @@ class Flow{
       switch(arg.expr){
         case EBinop(OpAssign, left, right):
           switch(left.expr){
-            case EUnop(OpNot, true, expr): ids.push({expr:expr, direct:true});
+            case EUnop(OpNot, true, expr), EUnop(OpNot, false, expr): ids.push({expr:expr, direct:true});
             default: ids.push({expr:left, direct:false});
           }
           calls.push({ids:ids, fun:right});
           ids = [];
         case ECall(_,_), EBlock(_):
           if(ids.length > 0){
-            error(arg, 'Unused identifiers.');
+            error(arg, 'Unused identifiers (or wrong syntax).');
           }
           calls.push({ids:[], fun:arg});
           ids = [];
-        case EUnop(OpNot, true, expr): ids.push({expr:expr, direct:true});
-        default: ids.push({expr:arg, direct:false});
+        default:
+          ids.push({expr:arg, direct:false});
       }
+    }
+    if(ids.length > 0){
+      trace(ids);
+      error(args[args.length-1], 'Unused identifiers (or wrong syntax).');
     }
     return calls;
   }
