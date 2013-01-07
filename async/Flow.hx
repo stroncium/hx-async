@@ -717,7 +717,7 @@ class Flow{
       switch(arg.expr){
         case EBinop(OpAssign, left, right):
           switch(left.expr){
-            case EUnop(OpNot, true, expr), EUnop(OpNot, false, expr): ids.push({expr:expr, direct:true});
+            case EUnop(OpNot, _, expr): ids.push({expr:expr, direct:true});
             default: ids.push({expr:left, direct:false});
           }
           calls.push({ids:ids, fun:right});
