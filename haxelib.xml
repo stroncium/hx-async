@@ -1,4 +1,4 @@
-<project name="async" url="https://github.com/stroncium/hx-async" license="GPL">
+<project name="async" url="https://github.com/stroncium/hx-async" license="MIT">
   <user name="stroncium"/>
   <tag v="async"/>
   <tag v="crossplatform"/>
