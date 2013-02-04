@@ -10,11 +10,11 @@ import async.tools.Macro;
 using Lambda;
 
 class Flow{
+  static inline function isAsyncCall(name:String) return name == 'async' || name == 'as'
+  static inline function isParallelCall(name:String) return name == 'parallel'
 
   static inline var PREFIX = #if async_readable '_' #else '__' #end;
-  static inline var ASYNC_CALL_FUN = 'async';
-  static inline var PARALLEL_CALL_FUN = 'parallel';
-  static inline var ASYNC_RAW_FUN = 'asyncRaw';
+  //~ static inline var ASYNC_RAW_FUN = 'asyncRaw';
   static inline var ERROR_NAME = #if async_readable '__error' #else '__e' #end;
   static var NULL:ExprDef = 'null'.ident();
   static var ZERO:ExprDef = EConst(CInt('0'));
@@ -407,11 +407,11 @@ class Flow{
       switch(line.expr){
         case ECall(func, args):{
           var id = func.extractIdent();
-          if(id == ASYNC_CALL_FUN){
+          if(isAsyncCall(id)){
             async = true;
             processAsyncCalls(func, argsToCalls(args));
           }
-          else if(id == PARALLEL_CALL_FUN){
+          else if(isParallelCall(id)){
             async = true;
             processParallelCalls(func, argsToCalls(args));
           }

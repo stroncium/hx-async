@@ -3,12 +3,12 @@ import async.Async;
 
 class Test implements async.Build{
 
-  @async static function test1(){
+  @:async static function test1(){
     trace(' === TEST 1 === ');
     async(Async.block({
       async(delay(100));
     })());
-    async(a, b = asyncGet2('string', 'another string'));
+    as(a, b = asyncGet2('string', 'another string'));
     trace('got '+a+' and '+b);
   }
 
@@ -42,7 +42,7 @@ class Test implements async.Build{
     //other errors would have gone to callback
   }
 
-  @async static function test5(){
+  @:async static function test5(){
     trace(' === TEST 5 === ');
     try{
       async(throwAsyncErrorIfTrue(false, 'error 1'));

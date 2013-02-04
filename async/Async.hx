@@ -22,7 +22,7 @@ class Async{
   }
 
   #if macro //
-  static inline var ASYNC_META = 'async';
+  static inline function isAsyncMeta(name:String) return name == 'async' || name == ':async'
   public static function buildClass(){
     var buildFields = Context.getBuildFields();
     for(f in buildFields){
@@ -30,10 +30,9 @@ class Async{
         case FFun(fun):
           var asyncAt = -1;
           for(i in 0...f.meta.length){
-            var m = f.meta[i];
-            switch(m.name){
-              case ASYNC_META: asyncAt = i; break;
-              default:
+            if(isAsyncMeta(f.meta[i].name)){
+              asyncAt = i;
+              break;
             }
           }
           if(asyncAt != -1){
