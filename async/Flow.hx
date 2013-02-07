@@ -6,6 +6,7 @@ import haxe.macro.Context;
 using async.tools.Macro;
 using async.tools.Various;
 import async.tools.Macro;
+import haxe.ds.StringMap;
 
 using Lambda;
 
@@ -32,19 +33,27 @@ class Flow{
     savedErrors = [];
   }
 
-  public static function convertFunction(fun:Function){
-    if(fun.args.length == 0) fun.args.push({name:'cb', type:null, opt:false});
-    var cbArg = fun.args[fun.args.length - 1];
-    counter = 0;
-    var returns = null;
-    if(cbArg.type != null){
-      switch(cbArg.type){
-        case TFunction(args, _):
-          returns = args.slice(1);
+  public static function convertFunction(fun:Function, ?params:Array<Expr>){
+    var cbType = null, returns = null;
+    if(params.length == 1){
+      switch(params[0].expr){
+        case EVars(vars):
+          returns = [];
+          var types = [TPath({name: 'Dynamic', pack:[], params:[] })];
+          cbType = TFunction(types, TPath({name:'Void', pack:[], params:[]}));
+          for(v in vars){
+            returns.push(v.type);
+            types.push(v.type);
+          }
+        case EConst(CIdent('None')):
+          returns = [];
+          cbType = TFunction([TPath({name: 'Dynamic', pack:[], params:[] })], TPath({name:'Void', pack:[], params:[]}));
         default:
       }
     }
-    fun.expr = convertBlock(cbArg.name, returns, fun.expr);
+    fun.args.push({name:'__cb', type:cbType, opt:false});
+    counter = 0;
+    fun.expr = convertBlock('__cb', returns, fun.expr);
   }
 
   public static function blockToFunction(e:Expr){
@@ -120,7 +129,7 @@ class Flow{
         }
       }
     }
-    var localNull = NULL.pos(e.pos), localZero = ZERO.pos(e.pos);
+    var localNull = NULL.pos(e.pos), localZero = ZERO.pos(e.pos), localFalse = FALSE.pos(e.pos);
     for(ret in flow.repsReturn){
       switch(ret.expr){
         case EReturn(sub):
@@ -150,9 +159,10 @@ class Flow{
         for(i in 0...returnsLength) ref.push(localNull);
       }
       else{
-        for(i in 1...returns.length){
+        for(i in 0...returns.length){
           ref.push(switch(returns[i]){
-            case TPath(path): (path.name == 'Int' && path.pack.length == 0) ? localZero : localNull;
+            case TPath(path) if(path.name == 'Int' && path.pack.length == 0): localZero;
+            case TPath(path) if(path.name == 'Bool' && path.pack.length == 0): localFalse;
             default: localNull;
           });
         }
@@ -177,7 +187,7 @@ class Flow{
       //~ case 1: newstate.root[0];
       //~ default: newstate.root.block().pos(e.pos);
     //~ };
-    #if async_trace_converted trace(ret.pos+'\n'+async.tools.MacroDump.dump(ret)); #end
+    #if async_trace_converted trace(ret.pos+' '+returns+'\n'+async.tools.MacroDump.dump(ret)); #end
     return ret;
   }
 
@@ -218,6 +228,7 @@ class Flow{
   var run:Bool;
 
   inline function processAsyncCalls(expr, calls:Array<{ids:Array<{expr:Expr, direct:Bool}>, fun:Expr}>){
+    //~ trace(calls);
     for(call in calls){
       var cbArgs = [{ name: ERROR_NAME, type: null, opt: false, value: null }];
       var newLines = [];
@@ -234,6 +245,7 @@ class Flow{
             cbArgs.push({name:name, type:null, opt:false, value:null});
           }
           else{
+            trace(calls);
             error(id.expr, 'Not an identifier.', true);
           }
         }
@@ -277,7 +289,7 @@ class Flow{
         var parallelCounterN = gen('parallelCounter'), afterParallelN = gen('afterParallel');
         var parallelCounterI = parallelCounterN.ident(), afterParallelI = afterParallelN.ident();
         var vars = [];
-        var idsUsed = new Hash();
+        var idsUsed = new StringMap();
         for(call in calls){
           switch(call.fun.expr){
             case EBlock(_): call.fun = ECall(blockToFunction(call.fun), []).pos(call.fun.pos);
@@ -711,13 +723,19 @@ class Flow{
   }
 
   inline static function argsToCalls(args:Array<Expr>){
+    if(args.length == 1){
+      switch(args[0].expr){
+        case EArrayDecl(elems): args = elems;
+        default:
+      }
+    }
     var calls = [];
     var ids = [];
     for(arg in args){
       switch(arg.expr){
         case EBinop(OpAssign, left, right):
           switch(left.expr){
-            case EUnop(OpNot, _, expr): ids.push({expr:expr, direct:true});
+            case EUnop(OpNot, false, expr): ids.push({expr:expr, direct:true});
             default: ids.push({expr:left, direct:false});
           }
           calls.push({ids:ids, fun:right});
@@ -729,7 +747,10 @@ class Flow{
           calls.push({ids:[], fun:arg});
           ids = [];
         default:
-          ids.push({expr:arg, direct:false});
+          switch(arg.expr){
+            case EUnop(OpNot, false, expr): ids.push({expr:expr, direct:true});
+            default: ids.push({expr:arg, direct:false});
+          }
       }
     }
     if(ids.length > 0){

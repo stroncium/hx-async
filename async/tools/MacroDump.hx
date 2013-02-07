@@ -61,6 +61,7 @@ class MacroDump{
   static inline function dumpBinop(op, e1, e2){
     var ret;
     switch(op){
+      #if haxe3 case OpArrow: ret = dumpExpr(e1)+' -> '+dumpExpr(e2); #end
       case OpAdd: ret = dumpExpr(e1)+' + '+dumpExpr(e2);
       case OpMult: ret = dumpExpr(e1)+' * '+dumpExpr(e2);
       case OpDiv:ret = dumpExpr(e1)+' / '+dumpExpr(e2);
@@ -113,7 +114,7 @@ class MacroDump{
     if(e.pos == null) return '### NO POS ###';
     var expr = e.expr;
     switch(expr){
-      case EType(_,_): throw 'type'; return null;
+      #if !haxe3 case EType(_,_): throw 'type'; return null; #end
       case EMeta(_): throw 'error'; return null;
       case EWhile(cond, expr, normal):
         if(normal){

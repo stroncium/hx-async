@@ -3,7 +3,7 @@ package async;
 #if macro import haxe.macro.Context; #end
 
 class Async{
-  @:macro
+  #if haxe3 macro #else @:macro #end
   public static function it(e:Expr):Dynamic{
     switch(e.expr){
       case EFunction(_, fun):
@@ -14,7 +14,7 @@ class Async{
     return e;
   }
 
-  @:macro
+  #if haxe3 macro #else @:macro #end
   public static function block(e:Expr):Dynamic{
     var ret = Flow.blockToFunction(e);
     Flow.printErrors();
@@ -36,8 +36,11 @@ class Async{
             }
           }
           if(asyncAt != -1){
-            Flow.convertFunction(fun);
-            f.meta.splice(asyncAt, 1);
+            var params = f.meta[asyncAt].params;
+            f.meta[asyncAt].params = [];
+            //~ trace(params);
+            Flow.convertFunction(fun, params);
+            //~ f.meta.splice(asyncAt, 1);
           }
         default:
       }

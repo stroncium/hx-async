@@ -3,29 +3,34 @@ import async.Async;
 
 class Test implements async.Build{
 
-  @:async static function test1(){
+  @:async(None) static function test1(){
     trace(' === TEST 1 === ');
-    async(Async.block({
-      async(delay(100));
+    as(Async.block({
+      as(delay(100));
     })());
-    as(a, b = asyncGet2('string', 'another string'));
-    trace('got '+a+' and '+b);
+    var a;
+    as(!a, b = asyncGet2('string', 'another string'));
+    as(c = asyncGet(null));
+    trace('got $a, $b and $c');
   }
 
   @async static function test2(){
     trace(' === TEST 2 === ');
     var i = 3;
-    while(i --> 0) async(delay(10));
+    while(i --> 0) as(delay(10));
   }
 
-  @async static function test3(){
+  @async(var a:haxe.ds.StringMap<String>)
+  //~ @async
+  static function test3(){
     trace(' === TEST 3 === ');
-    var result = [null, null];
-    async(
-      !result[0] = asyncGet('string'), //direct assign
-      !result[1] = asyncGet('string') //direct assign
-    );
-    trace('array: '+result);
+    var a = [null, null];
+    as([
+      !a[0] = asyncGet('string'), //direct assign
+      !a[1] = asyncGet('string'), //direct assign
+    ]);
+    trace('array: $a');
+    return new haxe.ds.StringMap();
   }
 
   @async static function test4(){
@@ -34,9 +39,9 @@ class Test implements async.Build{
       syncThrow(); // synchronous as hell
     }
     catch(e:String){
-      trace('got error: '+e);
+      trace('got error: $e');
       trace('thinking...');
-      async(delay(100));
+      as(delay(100));
       trace('realized we dont care about this error');
     }
     //other errors would have gone to callback
@@ -45,26 +50,26 @@ class Test implements async.Build{
   @:async static function test5(){
     trace(' === TEST 5 === ');
     try{
-      async(throwAsyncErrorIfTrue(false, 'error 1'));
-      async(throwAsyncErrorIfTrue(true, 'error 2'));
+      as(throwAsyncErrorIfTrue(false, 'error 1'));
+      as(throwAsyncErrorIfTrue(true, 'error 2'));
     }
     catch(e:String){
-      trace('error, just as we expected: '+e);
+      trace('error, just as we expected: $e');
     }
   }
 
   @async static function test6(){
     trace(' === TEST 6 === ');
-    parallel( // direct assigns in parallel are not supported yet
+    parallel([ // direct assigns in parallel are not supported yet
       v1 = asyncGet('string'),
       v2 = {
-        async(v = asyncGet('string'));
-        async(delay(200));
+        as(v = asyncGet('string'));
+        as(delay(200));
         return 'another '+v;
       },
-      delay(100)
-    );
-    trace('we have '+v1+' and '+v2+', at least 100 ms passed');
+      delay(100),
+    ]);
+    trace('we have $v1 and $v2, at least 100 ms passed');
   }
 
   @async static function test7(){
@@ -74,7 +79,7 @@ class Test implements async.Build{
       switch(i){
         case 2:
           trace('2 always takes longer');
-          async(delay(100));
+          as(delay(100));
         case 3:
           trace('don\'t like number 3');
           continue;
@@ -82,7 +87,7 @@ class Test implements async.Build{
           trace('4 is enough');
           break;
       }
-      trace('done with '+i);
+      trace('done with $i');
     }
   }
 
@@ -94,34 +99,34 @@ class Test implements async.Build{
       }
       return many(111, 'string');
     })());
-    trace('we got '+num+' and '+str);
+    trace('we got $num and $str');
   }
 
   @async static function testsFinished(){
     trace(' === TESTS FINISHED === ');
   }
 
-  @async static function asynchronous(int:Int, string:String, MARKER_cb){
-    async(
+  @async static function asynchronous(int:Int, string:String){
+    async([
       test1(),
       test2(),
-      test3(),
+      _ = test3(),
       test4(),
       test5(),
       test6(),
       test7(),
       test8(),
-      testsFinished()
-    );
+      testsFinished(),
+    ]);
   }
 
 
-  @async static function asyncGet<T>(val:T, cb){
+  @async(var ret:T) static function asyncGet<T>(val:T){
     return val;
   }
 
 
-  @async static function throwAsyncErrorIfTrue(bool, err, cb){
+  @async static function throwAsyncErrorIfTrue(bool, err){
     if(bool) throw err;
   }
 
