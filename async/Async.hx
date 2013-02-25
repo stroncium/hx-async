@@ -2,7 +2,10 @@ package async;
 #if macro import haxe.macro.Expr; #end
 #if macro import haxe.macro.Context; #end
 
+import haxe.PosInfos;
+
 class Async{
+
   #if haxe3 macro #else @:macro #end
   public static function it(e:Expr):Dynamic{
     switch(e.expr){
@@ -22,7 +25,7 @@ class Async{
   }
 
   #if macro //
-  static inline function isAsyncMeta(name:String) return name == 'async' || name == ':async'
+  static inline function isAsyncMeta(name:String) return name == 'async' || name == ':async';
   public static function buildClass(){
     var buildFields = Context.getBuildFields();
     for(f in buildFields){

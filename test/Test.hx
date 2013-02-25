@@ -1,5 +1,7 @@
 import haxe.macro.Expr;
 import async.Async;
+import haxe.PosInfos;
+import haxe.CallStack;
 
 class Test implements async.Build{
 
@@ -20,9 +22,7 @@ class Test implements async.Build{
     while(i --> 0) as(delay(10));
   }
 
-  @async(var a:haxe.ds.StringMap<String>)
-  //~ @async
-  static function test3(){
+  @async(var a:haxe.ds.StringMap<String>) static function test3(){
     trace(' === TEST 3 === ');
     var a = [null, null];
     as([
@@ -157,6 +157,6 @@ class Test implements async.Build{
   }
 
   static inline function platformDelay(ms:Int, fun){
-    #if cpp fun(); #else haxe.Timer.delay(fun, ms); #end
+    #if (cpp || neko || php) fun(); #else haxe.Timer.delay(fun, ms); #end
   }
 }

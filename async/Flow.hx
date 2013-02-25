@@ -11,8 +11,8 @@ import haxe.ds.StringMap;
 using Lambda;
 
 class Flow{
-  static inline function isAsyncCall(name:String) return name == 'async' || name == 'as'
-  static inline function isParallelCall(name:String) return name == 'parallel'
+  static inline function isAsyncCall(name:String) return name == 'async' || name == 'as';
+  static inline function isParallelCall(name:String) return name == 'parallel';
 
   static inline var PREFIX = #if async_readable '_' #else '__' #end;
   //~ static inline var ASYNC_RAW_FUN = 'asyncRaw';
@@ -404,7 +404,7 @@ class Flow{
     return EBlock(root).p();
   }
 
-  inline function closed() return !open
+  inline function closed() return !open;
 
   public function process(isrc:Expr){
     var prevPos = Macro.getPos();
@@ -685,7 +685,7 @@ class Flow{
   }
 
 
-  static inline function singleVar(name, val) return EVars([{name:name, type:null, expr:val}])
+  static inline function singleVar(name, val) return EVars([{name:name, type:null, expr:val}]);
 
   static inline function makeErrorFun(name:String, lines:Array<Expr>, onError:Expr){
     return EFunction(name, {
@@ -761,9 +761,9 @@ class Flow{
   }
 
 
-  static inline function assert(v, msg = 'shouldnt happen') if(!v) throw msg
+  static inline function assert(v, msg = 'shouldnt happen') if(!v) throw msg;
 
-  static inline function gen(str = '') return PREFIX+str+StringTools.hex(counter++)
+  static inline function gen(str = '') return PREFIX+str+StringTools.hex(counter++);
 
   static inline function error(expr:Expr, msg = 'Error (not clarified)', stop = false){
     if(stop){

@@ -5,4 +5,4 @@ submit: package
 	haxelib submit async.zip
 
 test: package
-	sudo haxelib test async.zip
+	haxelib local async.zip
