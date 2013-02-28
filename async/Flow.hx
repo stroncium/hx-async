@@ -35,7 +35,7 @@ class Flow{
 
   public static function convertFunction(fun:Function, ?params:Array<Expr>){
     var cbType = null, returns = null;
-    if(params.length == 1){
+    if(params != null && params.length == 1){
       switch(params[0].expr){
         case EVars(vars):
           returns = [];
@@ -326,10 +326,14 @@ class Flow{
               null
             ).p()
           ],
-          EBlock([
-            EBinop(OpAssign, parallelCounterI.p(), EConst(CInt('-1')).p()).p(),
-            ebCall(ERROR.p())
-          ]).p()
+          EIf(
+            EBinop(OpGte, parallelCounterI.p(), ZERO.p()).p(),
+            EBlock([
+              EBinop(OpAssign, parallelCounterI.p(), EConst(CInt('-1')).p()).p(),
+              ebCall(ERROR.p())
+            ]).p(),
+            null
+          ).p()
         ));
         for(call in calls){
           var lcb;
