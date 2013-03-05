@@ -403,22 +403,24 @@ class Flow{
       var line = src[pos++];
       line.pos.set();
       switch(line.expr){
-        case ECall(func, args):{
-          var id = func.extractIdent();
-          if(isAsyncCall(id)){
-            async = true;
-            processAsyncCalls(func, argsToCalls(args));
-          }
-          else if(isParallelCall(id)){
-            async = true;
-            processParallelCalls(func, argsToCalls(args));
-          }
-          else lines.push(line);
-        }
+        // case ECall(func, args):{
+        //   var id = func.extractIdent();
+        //   if(isAsyncCall(id)){
+        //     async = true;
+        //     processAsyncCalls(func, argsToCalls(args));
+        //   }
+        //   else if(isParallelCall(id)){
+        //     async = true;
+        //     processParallelCalls(func, argsToCalls(args));
+        //   }
+        //   else lines.push(line);
+        // }
         case EBinop(OpAssign, {expr:EArrayDecl(_)}, _):
           async = true;
           processAsyncCalls(line, argsToCalls([line]));
-
+        case EArrayDecl(elems):
+            async = true;
+            processParallelCalls(line, argsToCalls(elems));
         case EReturn(_):{
           lines.push(line);
           repsReturn.push(line);

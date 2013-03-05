@@ -3,5 +3,5 @@
   <tag v="async"/>
   <tag v="crossplatform"/>
   <description>Asynchronous programming made easy.</description>
-  <version name="1.0">Initial release, everything should work correctly.</version>
+  <version name="1.1">Reworked and simplified many things. Not compatible with 1.0 and may not be compatible with 1.1+. Use it just to test.</version>
 </project>

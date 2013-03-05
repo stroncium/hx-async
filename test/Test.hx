@@ -7,7 +7,7 @@ class Test implements async.Build{
 
   @:async(None) static function test1(){
     trace(' === TEST 1 === ');
-    [] = Async.block({ as(delay(100)); })(); // creepy, I know, just a test
+    [] = Async.block({ [] = delay(100); })(); // creepy, I know, just a test
     [var a:String, var b:String] = asyncGet2('string', 'another string');
     [var c:Int] = asyncGet(null);
     trace('got $a, $b and $c');
@@ -16,7 +16,7 @@ class Test implements async.Build{
   @async static function test2(){
     trace(' === TEST 2 === ');
     var i = 3;
-    while(i --> 0) as(delay(10));
+    while(i --> 0) [] = delay(10);
   }
 
   @async(var a:Map<String, String>) static function test3(){
@@ -55,7 +55,7 @@ class Test implements async.Build{
 
   @async static function test6(){
     trace(' === TEST 6 === ');
-    parallel([ // direct assigns in parallel are not supported yet
+    [ // direct assigns in parallel are not supported yet
       var v1 = asyncGet('string'),
       var v2 = {
         [var v] = asyncGet('string');
@@ -63,7 +63,7 @@ class Test implements async.Build{
         return 'another '+v;
       },
       delay(100),
-    ]);
+    ];
     trace('we have $v1 and $v2, at least 100 ms passed');
   }
 
@@ -102,17 +102,15 @@ class Test implements async.Build{
   }
 
   @async static function asynchronous(int:Int, string:String){
-    async([
-      test1(),
-      test2(),
-      _ = test3(),
-      test4(),
-      test5(),
-      test6(),
-      test7(),
-      test8(),
-      testsFinished(),
-    ]);
+    [] = test1();
+    [] = test2();
+    [_] = test3();
+    [] = test4();
+    [] = test5();
+    [] = test6();
+    [] = test7();
+    [] = test8();
+    [] = testsFinished();
   }
 
 
