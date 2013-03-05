@@ -14,7 +14,7 @@ We get seemingly synchronous code with special markings and convert it to asynch
   Later functions are just for the sake of completeness.
 
 ``` haxe
-class Test{
+class Test implements async.Build{
   @async(var int:Int, string:String, dyn:Dynamic) static function foo(){
     //returned types are optional
     return many(222, 'string', null);
