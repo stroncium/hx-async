@@ -13,7 +13,14 @@ One useful feature is total interoperability with asynchronous functions written
 However, there is a simple way to also use functions which call their callbacks with arbitrary arguments, but there may be a need in custom processing of this arguments(which is inevitable).
 
 
-The library isn't currently released on haxelib.
+
+## Development points
+  + We can allow optional arguments by setting callback as first argument(it isn't usable in pure code, but we dont care about this in generated code).
+  + Since library proved it's useability, it's time to second phase: automatic detection of asynchronous calls.
+  + Current async assigns should be reworked. I found out we can use `[var a, var b, var c]` syntax, need to check if `[var a, b, var c]` will work the way we want it to for async.
+  + Check source code mapping, it may be broken in some cases.
+  + Enriching errors with stacktrace-like information.
+  + Some code can be simplified, amount of calls reduced (functions which just check error and call next function which will also check for same errors).
 
 ## Example (same code as in test/)
 
@@ -228,8 +235,6 @@ class Test implements async.Build{
         Calls can't use variable named the same of any variable `parallel(...)` construct will pass results to unless in deeper scopes.
         That means `var a = 123; parallel(a <= getA(a));` will result in error which won't be detected.
 
-    - **DISABLED** `asyncr(<arguments>)` calls - are treated the same way as **async** calls, but callback arguments are used as is.
-
     - **`do{...}while(...); while(...){...}; for(<identifier> in <iterator>){...}`** loops
 
       The condition should be fully synchronous(in it's context)
@@ -278,11 +283,3 @@ class Test implements async.Build{
     Use `-D async_readable` compilation flag to make async code more readable.
 
 
-## ToDo
-  + parallel(...) should support direct assigns, just as async(...)
-  + testing, testing, testing (unit?)
-
-## Further improvements
-  + check source code mapping, it may be broken in some cases
-  + enriching errors with stacktrace-like information
-  + some code can be simplified, amount of calls reduced (functions which just check error and call next function which will also check for same errors)
