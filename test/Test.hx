@@ -7,12 +7,9 @@ class Test implements async.Build{
 
   @:async(None) static function test1(){
     trace(' === TEST 1 === ');
-    as(Async.block({
-      as(delay(100));
-    })());
-    var a;
-    as(!a, b = asyncGet2('string', 'another string'));
-    as(c = asyncGet(null));
+    [] = Async.block({ as(delay(100)); })(); // creepy, I know, just a test
+    [var a:String, var b:String] = asyncGet2('string', 'another string');
+    [var c:Int] = asyncGet(null);
     trace('got $a, $b and $c');
   }
 
@@ -22,15 +19,13 @@ class Test implements async.Build{
     while(i --> 0) as(delay(10));
   }
 
-  @async(var a:haxe.ds.StringMap<String>) static function test3(){
+  @async(var a:Map<String, String>) static function test3(){
     trace(' === TEST 3 === ');
     var a = [null, null];
-    as([
-      !a[0] = asyncGet('string'), //direct assign
-      !a[1] = asyncGet('string'), //direct assign
-    ]);
+    [a[0]] = asyncGet('string'); //direct assign
+    [a[1]] = asyncGet('string'); //direct assign
     trace('array: $a');
-    return new haxe.ds.StringMap();
+    return new Map<String, String>();
   }
 
   @async static function test4(){
@@ -41,7 +36,7 @@ class Test implements async.Build{
     catch(e:String){
       trace('got error: $e');
       trace('thinking...');
-      as(delay(100));
+      [] = delay(100);
       trace('realized we dont care about this error');
     }
     //other errors would have gone to callback
@@ -50,8 +45,8 @@ class Test implements async.Build{
   @:async static function test5(){
     trace(' === TEST 5 === ');
     try{
-      as(throwAsyncErrorIfTrue(false, 'error 1'));
-      as(throwAsyncErrorIfTrue(true, 'error 2'));
+      [] = throwAsyncErrorIfTrue(false, 'error 1');
+      [] = throwAsyncErrorIfTrue(true, 'error 2');
     }
     catch(e:String){
       trace('error, just as we expected: $e');
@@ -61,10 +56,10 @@ class Test implements async.Build{
   @async static function test6(){
     trace(' === TEST 6 === ');
     parallel([ // direct assigns in parallel are not supported yet
-      v1 = asyncGet('string'),
-      v2 = {
-        as(v = asyncGet('string'));
-        as(delay(200));
+      var v1 = asyncGet('string'),
+      var v2 = {
+        [var v] = asyncGet('string');
+        [] = delay(200);
         return 'another '+v;
       },
       delay(100),
@@ -79,7 +74,7 @@ class Test implements async.Build{
       switch(i){
         case 2:
           trace('2 always takes longer');
-          as(delay(100));
+          [] = delay(100);
         case 3:
           trace('don\'t like number 3');
           continue;
@@ -93,12 +88,12 @@ class Test implements async.Build{
 
   @async static function test8(){
     trace(' === TEST 8 === ');
-    async(num, str = Async.block({
+    [var num, var str] = Async.block({
       if(Math.random() < 2){
         return many(222, 'another string');
       }
       return many(111, 'string');
-    })());
+    })();
     trace('we got $num and $str');
   }
 

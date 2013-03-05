@@ -1,5 +1,5 @@
 -main Test
--lib async
+-cp ../
 -js test.js
 #--dce full
 -D async_readable

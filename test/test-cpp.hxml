@@ -1,4 +1,4 @@
 -main Test
--lib async
+-cp ../
 -cpp test-cpp
 --dce full

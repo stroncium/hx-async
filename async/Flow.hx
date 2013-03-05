@@ -9,6 +9,8 @@ import async.tools.Macro;
 import haxe.ds.StringMap;
 
 using Lambda;
+private typedef Arg = {expr:Expr, direct:Bool, ?type:haxe.macro.ComplexType};  //TODO
+private typedef Call = {ids:Array<Arg>, fun:Expr};
 
 class Flow{
   static inline function isAsyncCall(name:String) return name == 'async' || name == 'as';
@@ -227,22 +229,25 @@ class Flow{
   var parent:Flow;
   var run:Bool;
 
-  inline function processAsyncCalls(expr, calls:Array<{ids:Array<{expr:Expr, direct:Bool}>, fun:Expr}>){
+  inline function processAsyncCalls(expr, calls:Array<Call>){
     //~ trace(calls);
     for(call in calls){
       var cbArgs = [{ name: ERROR_NAME, type: null, opt: false, value: null }];
       var newLines = [];
       call.fun.pos.set();
       for(id in call.ids){
-        if(id.direct){
+        var name = id.expr.extractIdent();
+        if(name == '_'){
+          cbArgs.push({name:name, type:id.type, opt:false, value:null});
+        }
+        else if(id.direct){
           var genId = gen('');
           cbArgs.push({name:genId, type:null, opt:false, value:null});
           newLines.push(EBinop(OpAssign, id.expr, genId.ident().p()).p());
         }
         else{
-          var name = id.expr.extractIdent();
           if(name != null){
-            cbArgs.push({name:name, type:null, opt:false, value:null});
+            cbArgs.push({name:name, type:id.type, opt:false, value:null});
           }
           else{
             trace(calls);
@@ -275,7 +280,7 @@ class Flow{
     return expr;
   }
 
-  inline function processParallelCalls(expr, calls:Array<{ids:Array<{expr:Expr, direct:Bool}>, fun:Expr}>){
+  inline function processParallelCalls(expr, calls:Array<Call>){
     switch(calls.length){
       case 0:
         warning(expr, 'No parallel calls.');
@@ -355,7 +360,7 @@ class Flow{
               }
               else{
                 var genId = gen(name);
-                lcbArgs.push({ name: genId, type: null, opt: false, value: null });
+                lcbArgs.push({ name: genId, type: id.type, opt: false, value: null });
                 lcbLines.push(EBinop(OpAssign, name.ident().p(), genId.ident().p()).p());
               }
             }
@@ -378,29 +383,6 @@ class Flow{
         lines = newLines;
       }
     }
-  }
-
-  inline function processAsyncRawCall(realFunc:Expr, args:Array<Expr>, asyncParams:Array<Expr>){
-    async = true;
-    realFunc.pos.set();
-    var cbArgs = [];
-    for(par in asyncParams) cbArgs.push({
-      name:par.extractIdent(),
-      type:null,
-      opt:false,
-      value:null
-    });
-    var newLines = [];
-    var cb = EFunction(null, {
-          args: cbArgs,
-          expr: EBlock(newLines).p(),
-          params: [],
-          ret: null,
-        }).p();
-    args.push(cb);
-    //~ trace(MacroHelpers.dump(realFunc));
-    lines.push(realFunc);
-    lines = newLines;
   }
 
   public inline function getExpr(){
@@ -431,26 +413,12 @@ class Flow{
             async = true;
             processParallelCalls(func, argsToCalls(args));
           }
-/*
-          else if(id == ASYNC_PASSTHROUGH_FUN){
-            for(arg in args)
-              switch(arg.expr){
-                case EBlock(blines): for(line in blines) lines.push(line);
-                default: lines.push(arg);
-              }
-          }
-          else if(id == ASYNC_RAW_FUN){
-            //~ trace('async sure');
-            var realFunc = extractRealFunc(args);
-            switch(realFunc.expr){
-              //~ case ECall(func, callArgs): processAsyncRawCall(realFunc, callArgs, args);
-              case ECall(_, callArgs): processAsyncRawCall(realFunc, callArgs, args);
-              default: throw 'not a function call';
-            }
-          }
-*/
           else lines.push(line);
         }
+        case EBinop(OpAssign, {expr:EArrayDecl(_)}, _):
+          async = true;
+          processAsyncCalls(line, argsToCalls([line]));
+
         case EReturn(_):{
           lines.push(line);
           repsReturn.push(line);
@@ -726,40 +694,37 @@ class Flow{
     return false;
   }
 
-  inline static function argsToCalls(args:Array<Expr>){
+  inline static function argsToCalls(args:Array<Expr>):Array<{ ids:Array<Arg>, fun:Expr}>{
     if(args.length == 1){
       switch(args[0].expr){
         case EArrayDecl(elems): args = elems;
         default:
       }
     }
-    var calls = [];
-    var ids = [];
+    var calls:Array<{ ids:Array<Arg>, fun:Expr}> = [];
     for(arg in args){
       switch(arg.expr){
-        case EBinop(OpAssign, left, right):
-          switch(left.expr){
-            case EUnop(OpNot, false, expr): ids.push({expr:expr, direct:true});
-            default: ids.push({expr:left, direct:false});
-          }
-          calls.push({ids:ids, fun:right});
-          ids = [];
+
+        case EBinop(OpAssign, {expr:EArrayDecl(elems)}, fun):
+          calls.push({
+            ids:[for(e in elems) switch(e.expr){
+              case EVars(vars) if(vars.length == 1):
+                var vr = vars[0];
+                {expr: EConst(CIdent(vr.name)).p(), type:vr.type, direct:false};
+              default:
+                {expr:e, direct:true};
+            }],
+            fun:fun
+          });
+        case EBinop(OpAssign, expr, fun):
+          calls.push({ids:[{expr:expr, direct:true}], fun:fun});
+        case EVars(vars) if(vars.length == 1):
+          var vr = vars[0];
+          calls.push({ids:[{expr:EConst(CIdent(vr.name)).p(), type:vr.type, direct:false}], fun:vr.expr});
         case ECall(_,_), EBlock(_):
-          if(ids.length > 0){
-            error(arg, 'Unused identifiers (or wrong syntax).');
-          }
           calls.push({ids:[], fun:arg});
-          ids = [];
-        default:
-          switch(arg.expr){
-            case EUnop(OpNot, false, expr): ids.push({expr:expr, direct:true});
-            default: ids.push({expr:arg, direct:false});
-          }
+        default: error(arg, 'wtf');
       }
-    }
-    if(ids.length > 0){
-      trace(ids);
-      error(args[args.length-1], 'Unused identifiers (or wrong syntax).');
     }
     return calls;
   }
