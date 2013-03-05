@@ -14,6 +14,7 @@ We get seemingly synchronous code with special markings and convert it to asynch
   Later functions are just for the sake of completeness.
 
 ``` haxe
+class Test{
   @async(var int:Int, string:String, dyn:Dynamic) static function foo(){
     //returned types are optional
     return many(222, 'string', null);
@@ -37,6 +38,7 @@ We get seemingly synchronous code with special markings and convert it to asynch
     ]; // this will be ran in parallel
     trace(c, d);
   }
+}
 ```
 
 ## Features / Done
@@ -49,14 +51,14 @@ We get seemingly synchronous code with special markings and convert it to asynch
   + write `[<returns>] = call(<args>)` to call asynchronous function
 
   `[a, var b, var c:Int] = call(1, 2, 3); <other code>` is converted to something like
-``` haxe
+``` js
 call(1, 2, 3, function(err, _a, b, c:Int){
   if(err == null){
     a = _a;
     <other code>
   }
   else{ cb(err, null); }
-}
+});
 ```
   + if you put a couple of such calls into array, it will be executed in parallel
 ``` haxe
