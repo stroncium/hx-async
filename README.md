@@ -1,6 +1,6 @@
 # async - Asynchronous programming in HaXe made easy.
 
-## Beta version
+## RC version
 
 The aim of the project is to use the power of HaXe macro system to make complex asynchronous operations easier to write and read.
 
@@ -47,6 +47,7 @@ class Test implements async.Build{
   + Every function of such class with `@async` meta will be converted.
 
   Use `@async(var foo:Foo, bar, bas:Bas)` to explicitly type callback.
+  Use `@async(None)` to explicitly type callback as returning nothing(or error). ( We can't distinguish between @async and @async() at the moment. )
 
   + write `[<returns>] = call(<args>)` to call asynchronous function
 

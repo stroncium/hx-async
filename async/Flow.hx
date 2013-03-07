@@ -14,11 +14,7 @@ private typedef Arg = {expr:Expr, direct:Bool, ?type:haxe.macro.ComplexType};  /
 private typedef Call = {ids:Array<Arg>, fun:Expr};
 
 class Flow{
-  static inline function isAsyncCall(name:String) return name == 'async' || name == 'as';
-  static inline function isParallelCall(name:String) return name == 'parallel';
-
   static inline var PREFIX = #if async_readable '_' #else '__' #end;
-  //~ static inline var ASYNC_RAW_FUN = 'asyncRaw';
   static inline var ERROR_NAME = #if async_readable '__error' #else '__e' #end;
   static var NULL:ExprDef = 'null'.ident();
   static var ZERO:ExprDef = EConst(CInt('0'));
@@ -36,21 +32,27 @@ class Flow{
     savedErrors = [];
   }
 
+  static inline function simpleType(name:String, pack:Array<String> = null){
+    return TPath({name: name, pack: pack == null ? [] : pack, params:[] });
+  }
+  static var DYNAMIC = simpleType('Dynamic');
+  static var VOID = simpleType('Void');
+
   public static function convertFunction(fun:Function, ?params:Array<Expr>){
     var cbType = null, returns = null;
     if(params != null && params.length == 1){
       switch(params[0].expr){
         case EVars(vars):
           returns = [];
-          var types = [TPath({name: 'Dynamic', pack:[], params:[] })];
-          cbType = TFunction(types, TPath({name:'Void', pack:[], params:[]}));
+          var types = [DYNAMIC];
           for(v in vars){
             returns.push(v.type);
             types.push(v.type);
           }
+          cbType = TFunction(types, VOID);
         case EConst(CIdent('None')):
           returns = [];
-          cbType = TFunction([TPath({name: 'Dynamic', pack:[], params:[] })], TPath({name:'Void', pack:[], params:[]}));
+          cbType = TFunction([DYNAMIC], VOID);
         default:
       }
     }
@@ -177,8 +179,8 @@ class Flow{
             var args = ref.copy();
             args[0] = e;
             thr.expr = ECall(cb, args);
-          default:
-          //~ default: throw 'shouldnt happen, not a throw: '+thr;
+          // default:
+          default: throw 'shouldnt happen, not a throw: '+thr;
         }
       }
     }
@@ -190,7 +192,7 @@ class Flow{
       //~ case 1: newstate.root[0];
       //~ default: newstate.root.block().pos(e.pos);
     //~ };
-    #if async_trace_converted trace(ret.pos+' '+returns+'\n'+ret.toString()); #end
+    #if async_trace_converted trace('${ret.pos} $returns\n${ret.toString()}'); #end
     return ret;
   }
 
@@ -596,8 +598,7 @@ class Flow{
           for(thr in flow.repsThrow){
             switch(thr.expr){
               case EThrow(e): thr.expr = ECall(afterTryI.p(), [e]);
-              default:
-              //~ default: throw 'shouldnt happen';
+              default: throw 'shouldnt happen';
             }
           }
 
@@ -624,7 +625,6 @@ class Flow{
           else{
             for(cat in catches){
               var cflow = mkFlow(cat.expr);
-              //~ cflow.finalize(afterTryI.p().call([NULL.p()]).p());
               cflow.finalize(afterCatchI.p().call([NULL.p()]).p());
               cat.expr = cflow.getExpr();
             }
@@ -641,37 +641,33 @@ class Flow{
   }
 
 
-  static inline function singleVar(name, val) return EVars([{name:name, type:null, expr:val}]);
+  static inline function singleVar(name, val)
+    return EVars([{name:name, type:null, expr:val}]);
 
-  static inline function makeErrorFun(name:String, lines:Array<Expr>, onError:Expr){
+  static inline function makeFunction(name, args, expr, ret = null, params = null){
     return EFunction(name, {
-      args: [{name:ERROR_NAME, type:null, opt:false}],
-      expr: EIf(
+      args: args,
+      expr: expr,
+      ret: ret,
+      params: params == null ? [] : params,
+    }).p();
+  }
+  static inline function makeErrorFun(name:String, lines:Array<Expr>, onError:Expr)
+    return makeFunction(name, [{name:ERROR_NAME, type:null, opt:false}], 
+      EIf(
         EBinop(OpEq, ERROR.p(), NULL.p()).p(),
         EBlock(lines).p(),
         onError
-      ).p(),
-      ret: null,
-      params: [],
-    }).p();
-  }
+      ).p()
+    );
 
-  static inline function makeNoargFun(name:String, e:Expr){
-    return EFunction(name, {
-      expr: e,
-      args: [],
-      ret: null,
-      params: [],
-    }).p();
-  }
+  static inline function makeNoargFun(name:String, e:Expr)
+    return makeFunction(name, [], e);
 
-  static function haveCatchAll(catches:Array<{ name : String, type : ComplexType, expr : Expr }>){
+  static function haveCatchAll(catches:Array<Catch>){
     for(cat in catches){
       switch(cat.type){
-        case TPath(path):
-          if(path.name == 'Dynamic' && path.pack.length == 0){
-            return true;
-          }
+        case TPath({name:Dynamic, pack:[]}):
         default:
       }
     }
