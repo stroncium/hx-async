@@ -2,6 +2,7 @@ package async;
 
 import haxe.macro.Expr;
 import haxe.macro.Context;
+using haxe.macro.Tools;
 
 using async.tools.Macro;
 using async.tools.Various;
@@ -189,7 +190,7 @@ class Flow{
       //~ case 1: newstate.root[0];
       //~ default: newstate.root.block().pos(e.pos);
     //~ };
-    #if async_trace_converted trace(ret.pos+' '+returns+'\n'+async.tools.MacroDump.dump(ret)); #end
+    #if async_trace_converted trace(ret.pos+' '+returns+'\n'+ret.toString()); #end
     return ret;
   }
 
@@ -229,48 +230,45 @@ class Flow{
   var parent:Flow;
   var run:Bool;
 
-  inline function processAsyncCalls(expr, calls:Array<Call>){
-    //~ trace(calls);
-    for(call in calls){
-      var cbArgs = [{ name: ERROR_NAME, type: null, opt: false, value: null }];
-      var newLines = [];
-      call.fun.pos.set();
-      for(id in call.ids){
-        var name = id.expr.extractIdent();
-        if(name == '_'){
+  inline function processAsyncCall(expr, call:Call){
+    var cbArgs = [{ name: ERROR_NAME, type: null, opt: false, value: null }];
+    var newLines = [];
+    call.fun.pos.set();
+    for(id in call.ids){
+      var name = id.expr.extractIdent();
+      if(name == '_'){
+        cbArgs.push({name:name, type:id.type, opt:false, value:null});
+      }
+      else if(id.direct){
+        var genId = gen('');
+        cbArgs.push({name:genId, type:null, opt:false, value:null});
+        newLines.push(EBinop(OpAssign, id.expr, genId.ident().p()).p());
+      }
+      else{
+        if(name != null){
           cbArgs.push({name:name, type:id.type, opt:false, value:null});
         }
-        else if(id.direct){
-          var genId = gen('');
-          cbArgs.push({name:genId, type:null, opt:false, value:null});
-          newLines.push(EBinop(OpAssign, id.expr, genId.ident().p()).p());
-        }
         else{
-          if(name != null){
-            cbArgs.push({name:name, type:id.type, opt:false, value:null});
-          }
-          else{
-            trace(calls);
-            error(id.expr, 'Not an identifier.', true);
-          }
+          trace(call);
+          error(id.expr, 'Not an identifier.', true);
         }
       }
-      switch(call.fun.expr){
-        case ECall(_, args):
-          args.push(EFunction(null, {
-            args: cbArgs,
-            expr: EIf(
-              EBinop(OpEq, ERROR.p(), NULL.p()).p(),
-              EBlock(newLines).p(),
-              ebCall(ERROR.p())
-            ).p(),
-            ret: null,
-            params: [],
-          }).p());
-          lines.push(call.fun);
-          jumpIn(newLines);
-        default: error(call.fun, 'Not a function call.');
-      }
+    }
+    switch(call.fun.expr){
+      case ECall(_, args):
+        args.push(EFunction(null, {
+          args: cbArgs,
+          expr: EIf(
+            EBinop(OpEq, ERROR.p(), NULL.p()).p(),
+            EBlock(newLines).p(),
+            ebCall(ERROR.p())
+          ).p(),
+          ret: null,
+          params: [],
+        }).p());
+        lines.push(call.fun);
+        jumpIn(newLines);
+      default: error(call.fun, 'Not a function call.');
     }
   }
 
@@ -285,7 +283,7 @@ class Flow{
       case 0:
         warning(expr, 'No parallel calls.');
       case 1:
-        processAsyncCalls(expr, calls);
+        processAsyncCall(expr, calls[0]);
       default:{
         //TODO check our vars dont overlap with what we use in calls
         var prevPos = Macro.getPos();
@@ -395,14 +393,14 @@ class Flow{
   public function process(isrc:Expr){
     var prevPos = Macro.getPos();
     var src = isrc == null ? [] : switch(isrc.expr){ case EBlock(blines): blines; default: [isrc]; };
-    var pos = 0, len src.length;
+    var pos = 0, len = src.length;
     while(pos < len && run){
       var line = src[pos++];
       line.pos.set();
       switch(line.expr){
         case EBinop(OpAssign, {expr:EArrayDecl(_)}, _):
           async = true;
-          processAsyncCalls(line, argsToCalls([line]));
+          processAsyncCall(line, argToCall(line));
         case EArrayDecl(elems):
           async = true;
           processParallelCalls(line, argsToCalls(elems));
@@ -607,7 +605,6 @@ class Flow{
             for(cat in catches){
               var cflow = mkFlow(cat.expr);
               cflow.finalize(afterCatchI.p().call([NULL.p()]).p());
-              //~ cflow.finalize(EBinop(OpAssign, ERROR.p(), NULL.p()).p());
               cat.expr = cflow.getExpr();
             }
 
@@ -681,6 +678,30 @@ class Flow{
     return false;
   }
 
+  inline static function argToCall(arg:Expr):Call{
+    return switch(arg.expr){
+      case EBinop(OpAssign, {expr:EArrayDecl(elems)}, fun):
+        {
+          ids:[for(e in elems) switch(e.expr){
+            case EVars(vars) if(vars.length == 1):
+              var vr = vars[0];
+              {expr: EConst(CIdent(vr.name)).p(), type:vr.type, direct:false};
+            default:
+              {expr:e, direct:true};
+          }],
+          fun:fun
+        };
+      case EBinop(OpAssign, expr, fun):
+        {ids:[{expr:expr, direct:true}], fun:fun};
+      case EVars(vars) if(vars.length == 1):
+        var vr = vars[0];
+        {ids:[{expr:EConst(CIdent(vr.name)).p(), type:vr.type, direct:false}], fun:vr.expr};
+      case ECall(_,_), EBlock(_):
+        {ids:[], fun:arg};
+      default: error(arg, 'wtf'); null;
+    }
+  }
+
   inline static function argsToCalls(args:Array<Expr>):Array<{ ids:Array<Arg>, fun:Expr}>{
     if(args.length == 1){
       switch(args[0].expr){
@@ -688,34 +709,8 @@ class Flow{
         default:
       }
     }
-    var calls:Array<{ ids:Array<Arg>, fun:Expr}> = [];
-    for(arg in args){
-      switch(arg.expr){
-
-        case EBinop(OpAssign, {expr:EArrayDecl(elems)}, fun):
-          calls.push({
-            ids:[for(e in elems) switch(e.expr){
-              case EVars(vars) if(vars.length == 1):
-                var vr = vars[0];
-                {expr: EConst(CIdent(vr.name)).p(), type:vr.type, direct:false};
-              default:
-                {expr:e, direct:true};
-            }],
-            fun:fun
-          });
-        case EBinop(OpAssign, expr, fun):
-          calls.push({ids:[{expr:expr, direct:true}], fun:fun});
-        case EVars(vars) if(vars.length == 1):
-          var vr = vars[0];
-          calls.push({ids:[{expr:EConst(CIdent(vr.name)).p(), type:vr.type, direct:false}], fun:vr.expr});
-        case ECall(_,_), EBlock(_):
-          calls.push({ids:[], fun:arg});
-        default: error(arg, 'wtf');
-      }
-    }
-    return calls;
+    return [for(arg in args) argToCall(arg)];
   }
-
 
   static inline function assert(v, msg = 'shouldnt happen') if(!v) throw msg;
 
