@@ -394,11 +394,8 @@ class Flow{
 
   public function process(isrc:Expr){
     var prevPos = Macro.getPos();
-    var src = switch(isrc.expr){ case EBlock(blines): blines; default: [isrc]; };
-    var pos, len;
-
-    pos = 0;
-    len = src.length;
+    var src = isrc == null ? [] : switch(isrc.expr){ case EBlock(blines): blines; default: [isrc]; };
+    var pos = 0, len src.length;
     while(pos < len && run){
       var line = src[pos++];
       line.pos.set();
