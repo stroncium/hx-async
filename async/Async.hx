@@ -6,8 +6,11 @@ import haxe.PosInfos;
 
 class Async{
 
-  #if haxe3 macro #else @:macro #end
-  public static function it(e:Expr):Dynamic{
+  public static function traceError(err:Dynamic){
+    if(err != null) trace(err);
+  }
+
+  macro public static function it(e:Expr):Dynamic{
     switch(e.expr){
       case EFunction(_, fun):
         Flow.convertFunction(fun);
@@ -17,33 +20,36 @@ class Async{
     return e;
   }
 
-  #if haxe3 macro #else @:macro #end
-  public static function block(e:Expr):Dynamic{
+  macro public static function block(e:Expr):Dynamic{
     var ret = Flow.blockToFunction(e);
     Flow.printErrors();
     return ret;
   }
 
-  #if macro //
-  static inline function isAsyncMeta(name:String) return name == 'async' || name == ':async';
+  #if macro
   public static function buildClass(){
     var buildFields = Context.getBuildFields();
     for(f in buildFields){
       switch(f.kind){
         case FFun(fun):
-          var asyncAt = -1;
-          for(i in 0...f.meta.length){
-            if(isAsyncMeta(f.meta[i].name)){
-              asyncAt = i;
-              break;
+          var async = false, params = null, dump = false;
+          for(meta in f.meta){
+            switch(meta.name){
+              case 'async', ':async':
+                async = true;
+                params = meta.params;
+                meta.params = [];
+              case 'asyncDump', ':asyncDump':
+                dump = true;
+              default:
             }
           }
-          if(asyncAt != -1){
-            var params = f.meta[asyncAt].params;
-            f.meta[asyncAt].params = [];
-            //~ trace(params);
+          if(async){
             Flow.convertFunction(fun, params);
-            //~ f.meta.splice(asyncAt, 1);
+            if(dump){
+              neko.Lib.println(f.pos+':');
+              neko.Lib.println(haxe.macro.ExprTools.toString({expr:EFunction(f.name, fun), pos:f.pos}));
+            }
           }
         default:
       }

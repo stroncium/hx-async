@@ -15,7 +15,7 @@ private typedef Call = {ids:Array<Arg>, fun:Expr};
 
 class Flow{
   static inline var PREFIX = #if async_readable '_' #else '__' #end;
-  static inline var ERROR_NAME = #if async_readable '__error' #else '__e' #end;
+  static inline var ERROR_NAME = '_e';
   static var NULL:ExprDef = 'null'.ident();
   static var ZERO:ExprDef = EConst(CInt('0'));
   static var TRUE:ExprDef = 'true'.ident();
@@ -56,9 +56,12 @@ class Flow{
         default:
       }
     }
-    fun.args.push({name:'__cb', type:cbType, opt:false});
     counter = 0;
-    fun.expr = convertBlock('__cb', returns, fun.expr);
+    var cvt = convertBlock('__cb', returns, fun.expr);
+    fun.expr = cvt.expr;
+    if(cbType == null && cvt.args == 0) cbType = TFunction([DYNAMIC], VOID);
+    fun.args.push({name:'__cb', type:cbType, opt:false});
+    fun.ret = VOID;
   }
 
   public static function blockToFunction(e:Expr){
@@ -67,7 +70,7 @@ class Flow{
     return EFunction(null, {
       args: [{name:cbName, opt:false, type:null}],
       ret: null,
-      expr: convertBlock(cbName, null, e),
+      expr: convertBlock(cbName, null, e).expr,
       params: [],
     }).pos(pos);
   }
@@ -112,25 +115,25 @@ class Flow{
   }
 
 
-  static function convertBlock(cbName:String, returns:Array<ComplexType>, e:Expr){
+  static function convertBlock(cbName:String, returns:Array<ComplexType>, e:Expr):{args:Int, expr:Expr}{
     e.pos.set();
     var flow = new Flow(null).process(e);
     if(flow.open) flow.finalize();
 
     var cb = cbName.ident().pos(e.pos);
-    var returnsLength = returns == null ? 0 : returns.length;
-    if(returns == null && flow.repsReturn.length > 0){
+    var returnsLength = 0;
+    if(returns != null) returnsLength = returns.length;
+    else{
       for(ret in flow.repsReturn){
         switch(ret.expr){
-          case EReturn(sub):
-            returnsLength =
-              if(sub == null) 0;
-              else switch(sub.expr){
-                case ECall(f, args): (f.extractIdent() == 'many') ? args.length : 1;
-                default: 1;
-              }
+          case EReturn(e):
+            returnsLength = switch(e){
+              case null: 0;
+              case {expr:ECall(f, args)} if (f.extractIdent() == 'many'): args.length;
+              case _: 1;
+            }
             break;
-          default: throw 'shouldnt happen, not a return: '+ret;
+          default: trace('shouldnt happen');
         }
       }
     }
@@ -138,79 +141,55 @@ class Flow{
     for(ret in flow.repsReturn){
       switch(ret.expr){
         case EReturn(sub):
-          var args =
-            if(sub == null) [];
-            else switch(sub.expr){
-              case ECall(f, _args): (f.extractIdent() == 'many') ? _args : [sub];
-              default: [sub];
-            }
+          var args = switch(sub){
+            case null: [];
+            case {expr:ECall(f, _args)} if (f.extractIdent() == 'many'): _args;
+            default: [sub];
+          };
           args.unshift(localNull);
           ret.expr = ECall(cb, args);
         default: throw 'shouldnt happen, not a return: '+ret;
       }
     }
-    if(returnsLength == 0){
-      for(thr in flow.repsThrow){
-        switch(thr.expr){
-          case EThrow(e): thr.expr = ECall(cb, [e]);
-          default:
-          //~ default: throw 'shouldnt happen, not a throw: '+thr;
-        }
-      }
+    var ref;
+    if(returns == null){
+      ref = [for (i in 0...returnsLength) localNull];
     }
     else{
-      var ref = [null];
-      if(returns == null){
-        for(i in 0...returnsLength) ref.push(localNull);
-      }
-      else{
-        for(i in 0...returns.length){
-          ref.push(switch(returns[i]){
-            case TPath(path) if(path.name == 'Int' && path.pack.length == 0): localZero;
-            case TPath(path) if(path.name == 'Bool' && path.pack.length == 0): localFalse;
-            default: localNull;
-          });
-        }
-      }
+      ref = [for (i in 0...returnsLength) switch(returns[i]){
+        case TPath({name:'Int', pack:[]}): localZero;
+        case TPath({name:'Bool', pack:[]}): localFalse;
+        default: localNull;
+      }];
+    }
+    ref.unshift(null);
 
-      for(thr in flow.repsThrow){
-        switch(thr.expr){
-          case EThrow(e):
-            var args = ref.copy();
-            args[0] = e;
-            thr.expr = ECall(cb, args);
-          // default:
-          default: throw 'shouldnt happen, not a throw: '+thr;
-        }
+    for(thr in flow.repsThrow){
+      switch(thr.expr){
+        case EThrow(e):
+          var args = ref.copy();
+          args[0] = e;
+          thr.expr = ECall(cb, args);
+        default: trace('shouldn\'t happen: ${thr.toString()');
       }
     }
 
 
     var ret = EBlock(flow.root).pos(e.pos);
-    //~ return switch(newstate.root.length){
-      //~ case 0: [].block().pos(e.pos);
-      //~ case 1: newstate.root[0];
-      //~ default: newstate.root.block().pos(e.pos);
-    //~ };
-    #if async_trace_converted trace('${ret.pos} $returns\n${ret.toString()}'); #end
-    return ret;
+    // var ret = switch(newstate.root){ case [e]: e; case el: el.block().pos(e.pos); };
+    return {args:returnsLength, expr:ret};
   }
 
   inline function finalize(?call){
     if(open){
-      //~ if(lastCallExpr != null && lines.length == 0){
-        //~ lastCallExpr.expr = cb;
-      //~ }
-      //~ else{
-        if(call == null){
-          var expr = EReturn(null).p();
-          repsReturn.push(expr);
-          lines.push(expr);
-        }
-        else{
-          lines.push(call);
-        }
-      //~ }
+      if(call == null){
+        var expr = EReturn(null).p();
+        repsReturn.push(expr);
+        lines.push(EReturn(expr).p());
+      }
+      else{
+        lines.push(call);
+      }
       open = false;
     }
   }
@@ -232,42 +211,37 @@ class Flow{
   var parent:Flow;
   var run:Bool;
 
+  inline function makeCbArg(cbArgs, lines){
+    var err = ERROR.p(), block = EBlock(lines).p(), ebCallGen = ebCall(err);
+    lines.push(macro if($err != null) return $ebCallGen);
+    return EFunction(null, {
+      args: cbArgs,
+      expr: block,
+      ret: VOID,
+      params: [],
+    }).p();
+  }
+
   inline function processAsyncCall(expr, call:Call){
     var cbArgs = [{ name: ERROR_NAME, type: null, opt: false, value: null }];
     var newLines = [];
     call.fun.pos.set();
     for(id in call.ids){
       var name = id.expr.extractIdent();
-      if(name == '_'){
-        cbArgs.push({name:name, type:id.type, opt:false, value:null});
-      }
+      if(name == '_') cbArgs.push({name:name, type:null, opt:false, value:null});
       else if(id.direct){
-        var genId = gen('');
+        var genId = gen('_');
         cbArgs.push({name:genId, type:null, opt:false, value:null});
         newLines.push(EBinop(OpAssign, id.expr, genId.ident().p()).p());
       }
       else{
-        if(name != null){
-          cbArgs.push({name:name, type:id.type, opt:false, value:null});
-        }
-        else{
-          trace(call);
-          error(id.expr, 'Not an identifier.', true);
-        }
+        if(name == null) error(id.expr, 'Not an identifier.', true);
+        cbArgs.push({name:name, type:id.type, opt:false, value:null});
       }
     }
     switch(call.fun.expr){
       case ECall(_, args):
-        args.push(EFunction(null, {
-          args: cbArgs,
-          expr: EIf(
-            EBinop(OpEq, ERROR.p(), NULL.p()).p(),
-            EBlock(newLines).p(),
-            ebCall(ERROR.p())
-          ).p(),
-          ret: null,
-          params: [],
-        }).p());
+        args.push(makeCbArg(cbArgs, newLines));
         lines.push(call.fun);
         jumpIn(newLines);
       default: error(call.fun, 'Not a function call.');
@@ -291,7 +265,7 @@ class Flow{
         var prevPos = Macro.getPos();
         expr.pos.set();
 
-        var parallelCounterN = gen('parallelCounter'), afterParallelN = gen('afterParallel');
+        var parallelCounterN = gen('rem_'), afterParallelN = gen('after_');
         var parallelCounterI = parallelCounterN.ident(), afterParallelI = afterParallelN.ident();
         var vars = [];
         var idsUsed = new StringMap();
@@ -328,16 +302,16 @@ class Flow{
             EIf(
               EBinop(OpEq, EUnop(OpDecrement, false, parallelCounterI.p()).p(), ZERO.p()).p(),
               EBlock(newLines).p(),
-              null
+              null// EReturn(null).p()
             ).p()
           ],
           EIf(
             EBinop(OpGte, parallelCounterI.p(), ZERO.p()).p(),
             EBlock([
               EBinop(OpAssign, parallelCounterI.p(), EConst(CInt('-1')).p()).p(),
-              ebCall(ERROR.p())
+              EReturn(ebCall(ERROR.p())).p()
             ]).p(),
-            null
+            null// EReturn(null).p()
           ).p()
         ));
         for(call in calls){
@@ -353,15 +327,10 @@ class Flow{
               if(name == '_'){
                 lcbArgs.push({ name: '_', type: null, opt: false, value: null });
               }
-              else if(id.direct){
-                var genId = gen('');
+              else{
+                var genId = gen('_');
                 lcbArgs.push({ name: genId, type: null, opt: false, value: null });
                 lcbLines.push(EBinop(OpAssign, id.expr, genId.ident().p()).p());
-              }
-              else{
-                var genId = gen(name);
-                lcbArgs.push({ name: genId, type: id.type, opt: false, value: null });
-                lcbLines.push(EBinop(OpAssign, name.ident().p(), genId.ident().p()).p());
               }
             }
             lcbLines.push(afterParallelI.p().call([ERROR.p()]).p());
@@ -380,6 +349,7 @@ class Flow{
               error(call.fun, 'Either function call or block required.');
           }
         }
+        // lines.push(EReturn(null).p());
         lines = newLines;
       }
     }
@@ -392,9 +362,15 @@ class Flow{
 
   inline function closed() return !open;
 
-  public function process(isrc:Expr){
+  inline function oneExpr(ea:Array<Expr>){
+    return ea.length == 1 ? ea[0] : EBlock(ea).p();
+  }
+
+  public function process(isrc:Expr, use_return = true){
     var prevPos = Macro.getPos();
-    var src = isrc == null ? [] : switch(isrc.expr){ case EBlock(blines): blines; default: [isrc]; };
+    //FIXME something weird happens there
+    //var src = isrc == null ? [] : switch(isrc.expr){ case EBlock(blines): blines; default: [isrc]; };
+    var src = (isrc == null || isrc.expr == null) ? [] : switch(isrc.expr){ case EBlock(blines): blines; default: [isrc]; };
     var pos = 0, len = src.length;
     while(pos < len && run){
       var line = src[pos++];
@@ -407,7 +383,7 @@ class Flow{
           async = true;
           processParallelCalls(line, argsToCalls(elems));
         case EReturn(_):{
-          lines.push(line);
+          lines.push(EReturn(line).p());
           repsReturn.push(line);
           open = false;
           run = false;
@@ -506,42 +482,52 @@ class Flow{
           run = false;
           break;
         }
-        case EIf(econd, etrue, efalse):{
+        case EIf(econd, etrue, null):{
           var ftrue = mkFlow(etrue);
-          var lasync = ftrue.async || !ftrue.open;
-          var ffalse = null;
-          if(efalse != null){
-            ffalse = mkFlow(efalse);
-            lasync = lasync || ffalse.async || !ffalse.open;
+          if(!ftrue.open){
+            var afterIfLines = [];
+            lines.push(EIf(econd, ftrue.getExpr(), EBlock(afterIfLines).p()).p());
+            jumpIn(afterIfLines);
           }
-          if(lasync){
-            var afterIfN = gen('afterIf');
+          else if(ftrue.async){
+            var afterIfN = gen('after');
             var afterIfI = afterIfN.ident();
             var afterIfLines = [];
             var afterIfCall = afterIfI.p().call([]).p();
-            if(efalse != null || ftrue.open){
-              lines.push(makeNoargFun(afterIfN, EBlock(afterIfLines).p()));
-            }
-            var ifFalse = (efalse == null) ?
-              ftrue.closed() ? EBlock(afterIfLines).p() :afterIfCall :
-              EBlock(ffalse.root).p();
-            lines.push(EIf(econd, EBlock(ftrue.root).p(), ifFalse).p());
-            if(ftrue.open) ftrue.lines.push(afterIfCall);
-            if(efalse != null && ffalse.open) ffalse.lines.push(afterIfCall);
+            lines.push(makeNoargFun(afterIfN, EBlock(afterIfLines).p()));
+            ftrue.lines.push(afterIfCall);
+            lines.push(EIf(econd, ftrue.getExpr(), afterIfCall).p());
             jumpIn(afterIfLines);
           }
           else{
-            lines.push(EIf(econd, ftrue.getExpr(), efalse == null ? null : ffalse.getExpr()).p());
+            lines.push(EIf(econd, ftrue.getExpr(), null).p());
           }
-          if(ftrue.closed() && efalse != null && ffalse.closed()){
-            open = false;
-            run = false;
-            break;
+        }
+        case EIf(econd, etrue, efalse) :{
+          var ftrue = mkFlow(etrue);
+          var ffalse = mkFlow(efalse);
+          if(!ftrue.open && !ffalse.open){
+            lines.push(EIf(econd, ftrue.getExpr(), ffalse.getExpr()).p());
+            run = open = false;
+          }
+          else if(!ftrue.async && !ffalse.async){
+            lines.push(EIf(econd, ftrue.getExpr(), ffalse.getExpr()).p());
+          }
+          else{
+            var afterIfN = gen('after');
+            var afterIfI = afterIfN.ident();
+            var afterIfLines = [];
+            var afterIfCall = afterIfI.p().call([]).p();
+            lines.push(makeNoargFun(afterIfN, EBlock(afterIfLines).p()));
+            if(ffalse.open) ffalse.lines.push(afterIfCall);
+            if(ftrue.open) ftrue.lines.push(afterIfCall);
+            lines.push(EIf(econd, ftrue.getExpr(), ffalse.getExpr()).p());
+            jumpIn(afterIfLines);
           }
         }
         case EThrow(_):{
           repsThrow.push(line);
-          lines.push(line);
+          lines.push(EReturn(line).p());
           open = false;
           run = false;
           break;
@@ -565,18 +551,21 @@ class Flow{
           }
           else{
             async = true;
-            var afterSwitchN = gen('afterSwitch');
+            var afterSwitchN = gen('after_');
             var afterSwitchI = afterSwitchN.ident();
             var newLines = [];
             lines.push(makeNoargFun(afterSwitchN, EBlock(newLines).p()));
             for(flow in states){
+              // flow.finalize(EReturn(afterSwitchI.p().call([]).p()).p());
               flow.finalize(afterSwitchI.p().call([]).p());
             }
             var i = cases.length;
             while(i --> 0){
               cases[i].expr = states[i].getExpr();
             }
+            // lines.push(ESwitch(e, cases, edef == null ? EReturn(afterSwitchI.p().call([]).p()).p() : states[states.length - 1].getExpr()).p());
             lines.push(ESwitch(e, cases, edef == null ? afterSwitchI.p().call([]).p() : states[states.length - 1].getExpr()).p());
+            // lines.push(EReturn(null).p());
             lines = newLines;
           }
         }
@@ -652,17 +641,20 @@ class Flow{
       params: params == null ? [] : params,
     }).p();
   }
-  static inline function makeErrorFun(name:String, lines:Array<Expr>, onError:Expr)
+
+  static inline function makeErrorFun(name:String, lines:Array<Expr>, onError:Expr){
     return makeFunction(name, [{name:ERROR_NAME, type:null, opt:false}], 
       EIf(
         EBinop(OpEq, ERROR.p(), NULL.p()).p(),
         EBlock(lines).p(),
         onError
-      ).p()
+      ).p(),
+      VOID
     );
+  }
 
   static inline function makeNoargFun(name:String, e:Expr)
-    return makeFunction(name, [], e);
+    return makeFunction(name, [], e, VOID);
 
   static function haveCatchAll(catches:Array<Catch>){
     for(cat in catches){
@@ -710,7 +702,7 @@ class Flow{
 
   static inline function assert(v, msg = 'shouldnt happen') if(!v) throw msg;
 
-  static inline function gen(str = '') return PREFIX+str+StringTools.hex(counter++);
+  static inline function gen(str = '_') return str+StringTools.hex(counter++);
 
   static inline function error(expr:Expr, msg = 'Error (not clarified)', stop = false){
     if(stop){

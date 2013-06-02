@@ -97,6 +97,23 @@ class Test implements async.Build{
     trace('we got $num and $str');
   }
 
+  @async static function test9(){
+    trace(' === TEST 9 === ');
+    var t = true, f = false;
+    if(f){
+      trace('shouldn\'t happen');
+      return;
+    }
+    if(t){
+      trace('should happen');
+      return;
+    }
+    else{
+      trace('shouldn\'t happen');
+      return;
+    }
+  }
+
   @async static function testsFinished(){
     trace(' === TESTS FINISHED === ');
   }
@@ -110,6 +127,7 @@ class Test implements async.Build{
     [] = test6();
     [] = test7();
     [] = test8();
+    [] = test9();
     [] = testsFinished();
   }
 
