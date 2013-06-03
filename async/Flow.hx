@@ -170,7 +170,7 @@ class Flow{
           var args = ref.copy();
           args[0] = e;
           thr.expr = ECall(cb, args);
-        default: trace('shouldn\'t happen: ${thr.toString()');
+        default: trace('shouldn\'t happen: ${thr.toString()}');
       }
     }
 
