@@ -38,6 +38,8 @@ class Flow{
   static var DYNAMIC = simpleType('Dynamic');
   static var VOID = simpleType('Void');
 
+
+  static inline var CB_NAME = '__cb';
   public static function convertFunction(fun:Function, ?params:Array<Expr>){
     var cbType = null, returns = null;
     if(params != null && params.length == 1){
@@ -57,22 +59,20 @@ class Flow{
       }
     }
     counter = 0;
-    var cvt = convertBlock('__cb', returns, fun.expr);
+    var cvt = convertBlock(CB_NAME, returns, fun.expr);
     fun.expr = cvt.expr;
     if(cbType == null && cvt.args == 0) cbType = TFunction([DYNAMIC], VOID);
-    fun.args.push({name:'__cb', type:cbType, opt:false});
+    fun.args.push({name:CB_NAME, type:cbType, opt:false});
     fun.ret = VOID;
   }
 
   public static function blockToFunction(e:Expr){
-    var pos = e.pos;
-    var cbName = 'cb';
     return EFunction(null, {
-      args: [{name:cbName, opt:false, type:null}],
+      args: [{name:CB_NAME, opt:false, type:null}],
       ret: null,
-      expr: convertBlock(cbName, null, e).expr,
+      expr: convertBlock(CB_NAME, null, e).expr,
       params: [],
-    }).pos(pos);
+    }).pos(e.pos);
   }
 
 
@@ -120,7 +120,7 @@ class Flow{
     var flow = new Flow(null).process(e);
     if(flow.open) flow.finalize();
 
-    var cb = cbName.ident().pos(e.pos);
+    var cbIdent = cbName.ident().pos(e.pos);
     var returnsLength = 0;
     if(returns != null) returnsLength = returns.length;
     else{
@@ -147,7 +147,7 @@ class Flow{
             default: [sub];
           };
           args.unshift(localNull);
-          ret.expr = ECall(cb, args);
+          ret.expr = cbIdent.call(args);
         default: throw 'shouldnt happen, not a return: '+ret;
       }
     }
@@ -164,13 +164,14 @@ class Flow{
     }
     ref.unshift(null);
 
+
     for(thr in flow.repsThrow){
       switch(thr.expr){
         case EThrow(e):
           var args = ref.copy();
           args[0] = e;
-          thr.expr = ECall(cb, args);
-        default: trace('shouldn\'t happen: ${thr.toString()}');
+          thr.expr = cbIdent.call(args);
+        case _: trace('shouldn\'t happen: ${thr.pos} ${thr.toString()}');
       }
     }
 
@@ -249,6 +250,9 @@ class Flow{
   }
 
   inline function ebCall(arg:Expr){
+    #if async_stack
+      arg = ECall(macro async.AsyncError.mk, [arg]).p();
+    #end
     var expr = EThrow(arg).p();
     repsThrow.push(expr);
     return expr;
@@ -576,28 +580,25 @@ class Flow{
           async = true;
 
           var newLines = [];
-          lines.push(makeErrorFun(afterCatchN, newLines, ebCall(ERROR.p())));
+          var err = ERROR.p();
+          lines.push(makeErrorFun(afterCatchN, newLines, ebCall(err)));
 
           if(!haveCatchAll(catches)){
-            catches.push({name:ERROR_NAME, type:TPath({name:'Dynamic', pack:[], params:[]}), expr:
-              ebCall(ERROR.p())
-            });
+            var expr = EThrow(ERROR.p()).p();
+            // repsThrow.push(expr);
+            catches.push({name:ERROR_NAME, type:DYNAMIC, expr: expr});
           }
 
-          for(thr in flow.repsThrow){
-            switch(thr.expr){
-              case EThrow(e): thr.expr = ECall(afterTryI.p(), [e]);
-              default: throw 'shouldnt happen';
-            }
+          for(cat in catches){
+            var cflow = mkFlow(cat.expr);
+            cflow.finalize(afterCatchI.p().call([NULL.p()]).p());
+            cat.expr = cflow.getExpr();
           }
-
           if(flow.async){
-            for(cat in catches){
-              var cflow = mkFlow(cat.expr);
-              cflow.finalize(afterCatchI.p().call([NULL.p()]).p());
-              cat.expr = cflow.getExpr();
+            for(thr in flow.repsThrow) switch(thr.expr){
+              case EThrow(e): thr.expr = ECall(afterTryI.p(), [e]);
+              default: throw 'shouldn\'t happen';
             }
-
             lines.push(EFunction(afterTryN, {
               args: [{name:ERROR_NAME, type:null, opt:false}],
               expr: EIf(
@@ -612,12 +613,6 @@ class Flow{
             for(nline in flow.root) lines.push(nline);
           }
           else{
-            for(cat in catches){
-              var cflow = mkFlow(cat.expr);
-              cflow.finalize(afterCatchI.p().call([NULL.p()]).p());
-              cat.expr = cflow.getExpr();
-            }
-
             lines.push(ETry(flow.getExpr(), catches).p());
           }
           jumpIn(newLines);

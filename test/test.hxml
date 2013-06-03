@@ -3,5 +3,4 @@
 -js test.js
 #--dce full
 -D async_readable
-#-D async_trace_converted
--D haxe3
+-D async_stack

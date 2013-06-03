@@ -48,9 +48,15 @@ class Test implements async.Build{
       [] = throwAsyncErrorIfTrue(false, 'error 1');
       [] = throwAsyncErrorIfTrue(true, 'error 2');
     }
+    #if async_stack
+    catch(e:async.AsyncError<Dynamic>){
+      trace('error, just as we expected: $e');
+    }
+    #else
     catch(e:String){
       trace('error, just as we expected: $e');
     }
+    #end
   }
 
   @async static function test6(){
@@ -138,7 +144,11 @@ class Test implements async.Build{
 
 
   @async static function throwAsyncErrorIfTrue(bool, err){
-    if(bool) throw err;
+    #if async_stack
+      if(bool) throw new async.AsyncError(err);
+    #else
+      if(bool) throw err;
+    #end
   }
 
   //freely integrates with normal asynchronous functions
