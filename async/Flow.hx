@@ -205,8 +205,8 @@ class Flow{
       for(ret in flow.repsReturn){
         switch(ret.expr){
           case EReturn(e):
-            returnsLength = switch(e){
-              case null: 0;
+            returnsLength = if(e == null) 0;
+            else switch(e){
               case {expr:ECall({expr:EConst(CIdent('many'))}, args)}: args.length;
               case _: 1;
             }
@@ -219,11 +219,12 @@ class Flow{
     for(ret in flow.repsReturn){
       switch(ret.expr){
         case EReturn(sub):
-          var args = switch(sub){
-            case null: [];
-            case {expr:ECall({expr:EConst(CIdent('many'))}, args)}: args;
-            default: [sub];
-          };
+          var args =
+            if(sub == null) [];
+            else switch(sub){
+              case {expr:ECall({expr:EConst(CIdent('many'))}, args)}: args;
+              default: [sub];
+            };
           args.unshift(localNull);
           ret.expr = cbIdent.call(args);
         default: throw 'shouldnt happen, not a return: '+ret;
