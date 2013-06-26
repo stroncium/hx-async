@@ -42,21 +42,19 @@ class Test implements async.Build{
     //other errors would have gone to callback
   }
 
-  @:async static function test5(){
+  @async @asyncDump static function test5(){
     trace(' === TEST 5 === ');
     try{
       [] = throwAsyncErrorIfTrue(false, 'error 1');
       [] = throwAsyncErrorIfTrue(true, 'error 2');
     }
-    #if async_stack
-    catch(e:async.AsyncError<Dynamic>){
-      trace('error, just as we expected: $e');
-    }
-    #else
     catch(e:String){
-      trace('error, just as we expected: $e');
+      trace('error: $e');
+      if(e == 'error 2') trace('just as we expected');
+      #if async_stack
+        trace('async error: '+Async.getError());
+      #end
     }
-    #end
   }
 
   @async static function test6(){
@@ -143,12 +141,12 @@ class Test implements async.Build{
   }
 
 
-  @async static function throwAsyncErrorIfTrue(bool, err){
-    #if async_stack
-      if(bool) throw new async.AsyncError(err);
-    #else
+  @async static function throwAsyncErrorIfTrue(bool, err:Dynamic){
+    // #if async_stack
+    //   if(bool) throw new async.AsyncError(err);
+    // #else
       if(bool) throw err;
-    #end
+    // #end
   }
 
   //freely integrates with normal asynchronous functions

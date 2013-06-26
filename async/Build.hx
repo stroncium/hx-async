@@ -1,5 +1,3 @@
 package async;
-@:autoBuild(async.Async.buildClass())
-interface Build{
-}
+@:autoBuild(async.Flow.buildClass()) interface Build{}
 

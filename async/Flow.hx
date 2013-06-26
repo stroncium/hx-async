@@ -14,8 +14,50 @@ private typedef Arg = {expr:Expr, direct:Bool, ?type:haxe.macro.ComplexType};  /
 private typedef Call = {ids:Array<Arg>, fun:Expr};
 
 class Flow{
-  static inline var PREFIX = #if async_readable '_' #else '__' #end;
-  static inline var ERROR_NAME = '_e';
+  static var STACK:Bool;
+  static var READABLE:Bool;
+  static var PREFIX:String;
+  static var ERROR_TYPE;
+
+  static var DYNAMIC;
+  static var VOID;
+  static var ASYNC_ERROR;
+
+
+  private static function updateContext(){
+    DYNAMIC = TPath({name:'Dynamic', pack:[], params:[]});
+    VOID = TPath({name:'Void', pack:[], params:[]});
+    ASYNC_ERROR = TPath({name:'AsyncError', pack:['async'], params:[]});
+    STACK = Context.defined('async_stack');
+    READABLE = Context.defined('async_readable');
+    PREFIX = READABLE ? '_' : '__';
+    ERROR_TYPE = STACK ? ASYNC_ERROR : DYNAMIC;
+    // trace('error: $ERROR_TYPE'); 
+    return true;
+  }
+
+  private static function __init__(){
+    Context.onMacroContextReused(updateContext);
+    updateContext();
+  }
+
+
+  public static function getAsyncError(){
+    var pos = Context.currentPos();
+    if(!STACK) Context.error('You can get async stack only when compile with -D async-stack.', pos);
+    // if(!Context.definedValue('__stackErr')) throw 'You can get async stack only inside async catch.';
+    var expr = macro __stackErr;
+    try{
+      Context.typeof(expr);
+      return expr;
+    }
+    catch(e:Dynamic){
+      Context.error('You can get async stack only when compile with -D async-stack.', pos);
+      return null;
+    }
+  }
+
+  static var ERROR_NAME = '_e';
   static var NULL:ExprDef = 'null'.ident();
   static var ZERO:ExprDef = EConst(CInt('0'));
   static var TRUE:ExprDef = 'true'.ident();
@@ -24,6 +66,37 @@ class Flow{
 
   static var counter:Int;
   static var savedErrors:Array<Error> = [];
+
+  public static function buildClass(){
+    var buildFields = Context.getBuildFields();
+    for(f in buildFields){
+      switch(f.kind){
+        case FFun(fun):
+          var async = false, params = null, dump = false;
+          for(meta in f.meta){
+            switch(meta.name){
+              case 'async', ':async':
+                async = true;
+                params = meta.params;
+                meta.params = [];
+              case 'asyncDump', ':asyncDump':
+                dump = true;
+              default:
+            }
+          }
+          if(async){
+            convertFunction(fun, params);
+            if(dump){
+              neko.Lib.println(f.pos+':');
+              neko.Lib.println(haxe.macro.ExprTools.toString({expr:EFunction(f.name, fun), pos:f.pos}));
+            }
+          }
+        default:
+      }
+    }
+    printErrors();
+    return buildFields;
+  }
 
   public static function printErrors(){
     for(error in savedErrors){
@@ -35,9 +108,6 @@ class Flow{
   static inline function simpleType(name:String, pack:Array<String> = null){
     return TPath({name: name, pack: pack == null ? [] : pack, params:[] });
   }
-  static var DYNAMIC = simpleType('Dynamic');
-  static var VOID = simpleType('Void');
-
 
   static inline var CB_NAME = '__cb';
   public static function convertFunction(fun:Function, ?params:Array<Expr>){
@@ -46,7 +116,7 @@ class Flow{
       switch(params[0].expr){
         case EVars(vars):
           returns = [];
-          var types = [DYNAMIC];
+          var types = [ERROR_TYPE];
           for(v in vars){
             returns.push(v.type);
             types.push(v.type);
@@ -54,25 +124,33 @@ class Flow{
           cbType = TFunction(types, VOID);
         case EConst(CIdent('None')):
           returns = [];
-          cbType = TFunction([DYNAMIC], VOID);
+          cbType = TFunction([ERROR_TYPE], VOID);
         default:
       }
     }
     counter = 0;
     var cvt = convertBlock(CB_NAME, returns, fun.expr);
     fun.expr = cvt.expr;
-    if(cbType == null && cvt.args == 0) cbType = TFunction([DYNAMIC], VOID);
+    if(cbType == null && cvt.args == 0) cbType = TFunction([ERROR_TYPE], VOID);
     fun.args.push({name:CB_NAME, type:cbType, opt:false});
     fun.ret = VOID;
   }
 
   public static function blockToFunction(e:Expr){
-    return EFunction(null, {
-      args: [{name:CB_NAME, opt:false, type:null}],
+    var newFun = {
+      args: [],
       ret: null,
-      expr: convertBlock(CB_NAME, null, e).expr,
+      expr: e,
       params: [],
-    }).pos(e.pos);
+    };
+    convertFunction(newFun);
+    return EFunction(null, newFun).pos(e.pos);
+    // return EFunction(null, {
+    //   args: [{name:CB_NAME, opt:false, type:TFunction([ERROR_TYPE], VOID)}],
+    //   ret: null,
+    //   expr: convertBlock(CB_NAME, null, e).expr,
+    //   params: [],
+    // }).pos(e.pos);
   }
 
 
@@ -129,7 +207,7 @@ class Flow{
           case EReturn(e):
             returnsLength = switch(e){
               case null: 0;
-              case {expr:ECall(f, args)} if (f.extractIdent() == 'many'): args.length;
+              case {expr:ECall({expr:EConst(CIdent('many'))}, args)}: args.length;
               case _: 1;
             }
             break;
@@ -143,7 +221,7 @@ class Flow{
         case EReturn(sub):
           var args = switch(sub){
             case null: [];
-            case {expr:ECall(f, _args)} if (f.extractIdent() == 'many'): _args;
+            case {expr:ECall({expr:EConst(CIdent('many'))}, args)}: args;
             default: [sub];
           };
           args.unshift(localNull);
@@ -169,7 +247,7 @@ class Flow{
       switch(thr.expr){
         case EThrow(e):
           var args = ref.copy();
-          args[0] = e;
+          args[0] = stackIt(e);
           thr.expr = cbIdent.call(args);
         case _: trace('shouldn\'t happen: ${thr.pos} ${thr.toString()}');
       }
@@ -179,6 +257,10 @@ class Flow{
     var ret = EBlock(flow.root).pos(e.pos);
     // var ret = switch(newstate.root){ case [e]: e; case el: el.block().pos(e.pos); };
     return {args:returnsLength, expr:ret};
+  }
+
+  static inline function stackIt(e){
+    return STACK ? ECall(macro async.AsyncError.mk, [e]).pos(e.pos) : e; 
   }
 
   inline function finalize(?call){
@@ -250,9 +332,6 @@ class Flow{
   }
 
   inline function ebCall(arg:Expr){
-    #if async_stack
-      arg = ECall(macro async.AsyncError.mk, [arg]).p();
-    #end
     var expr = EThrow(arg).p();
     repsThrow.push(expr);
     return expr;
@@ -380,7 +459,7 @@ class Flow{
       var line = src[pos++];
       line.pos.set();
       switch(line.expr){
-        case EBinop(OpAssign, {expr:EArrayDecl(_)}, _):
+        case EBinop(OpAssign | OpLte, {expr:EArrayDecl(_)}, _):
           async = true;
           processAsyncCall(line, argToCall(line));
         case EArrayDecl(elems):
@@ -494,10 +573,8 @@ class Flow{
             jumpIn(afterIfLines);
           }
           else if(ftrue.async){
-            var afterIfN = gen('after');
-            var afterIfI = afterIfN.ident();
+            var afterIfN = gen('after'), afterIfI = afterIfN.ident(), afterIfCall = afterIfI.p().call([]).p();
             var afterIfLines = [];
-            var afterIfCall = afterIfI.p().call([]).p();
             lines.push(makeNoargFun(afterIfN, EBlock(afterIfLines).p()));
             ftrue.lines.push(afterIfCall);
             lines.push(EIf(econd, ftrue.getExpr(), afterIfCall).p());
@@ -518,10 +595,8 @@ class Flow{
             lines.push(EIf(econd, ftrue.getExpr(), ffalse.getExpr()).p());
           }
           else{
-            var afterIfN = gen('after');
-            var afterIfI = afterIfN.ident();
+            var afterIfN = gen('after'), afterIfI = afterIfN.ident(), afterIfCall = afterIfI.p().call([]).p();
             var afterIfLines = [];
-            var afterIfCall = afterIfI.p().call([]).p();
             lines.push(makeNoargFun(afterIfN, EBlock(afterIfLines).p()));
             if(ffalse.open) ffalse.lines.push(afterIfCall);
             if(ftrue.open) ftrue.lines.push(afterIfCall);
@@ -560,56 +635,94 @@ class Flow{
             var newLines = [];
             lines.push(makeNoargFun(afterSwitchN, EBlock(newLines).p()));
             for(flow in states){
-              // flow.finalize(EReturn(afterSwitchI.p().call([]).p()).p());
               flow.finalize(afterSwitchI.p().call([]).p());
             }
             var i = cases.length;
             while(i --> 0){
               cases[i].expr = states[i].getExpr();
             }
-            // lines.push(ESwitch(e, cases, edef == null ? EReturn(afterSwitchI.p().call([]).p()).p() : states[states.length - 1].getExpr()).p());
             lines.push(ESwitch(e, cases, edef == null ? afterSwitchI.p().call([]).p() : states[states.length - 1].getExpr()).p());
-            // lines.push(EReturn(null).p());
             lines = newLines;
           }
         }
         case ETry(expr, catches):{
           var afterTryN = gen('afterTry'), afterCatchN = gen('afterCatch');
-          var afterTryI = afterTryN.ident(), afterCatchI = afterCatchN.ident();
+          var afterTryI = afterTryN.ident().p(), afterCatchI = afterCatchN.ident().p();
           var flow = mkTry(expr);
           async = true;
 
           var newLines = [];
           var err = ERROR.p();
           lines.push(makeErrorFun(afterCatchN, newLines, ebCall(err)));
-
           if(!haveCatchAll(catches)){
-            var expr = EThrow(ERROR.p()).p();
-            // repsThrow.push(expr);
-            catches.push({name:ERROR_NAME, type:DYNAMIC, expr: expr});
+            var err = ERROR.p();
+            catches.push({name:ERROR_NAME, type:DYNAMIC, expr: macro throw $err});
           }
 
           for(cat in catches){
             var cflow = mkFlow(cat.expr);
-            cflow.finalize(afterCatchI.p().call([NULL.p()]).p());
+            cflow.finalize(afterCatchI.call([NULL.p()]).p());
             cat.expr = cflow.getExpr();
           }
           if(flow.async){
             for(thr in flow.repsThrow) switch(thr.expr){
-              case EThrow(e): thr.expr = ECall(afterTryI.p(), [e]);
+              case EThrow(e): thr.expr = ECall(afterTryI, [stackIt(e)]);
               default: throw 'shouldn\'t happen';
             }
-            lines.push(EFunction(afterTryN, {
-              args: [{name:ERROR_NAME, type:null, opt:false}],
-              expr: EIf(
-                EBinop(OpNotEq, ERROR.p(), NULL.p()).p(),
-                ETry( EThrow(ERROR.p()).p(), catches ).p(),
-                ECall(afterCatchI.p(), [NULL.p()]).p()
-              ).p(),
-              ret: null,
-              params: [],
-            }).p());
-            if(flow.open) flow.lines.push(afterTryI.p().call([NULL.p()]).p());
+            if(STACK){
+              function block(e1:Expr, e2:Expr):ExprDef{
+                switch(e2.expr){
+                  case EBlock(el): el.unshift(e1); return e2.expr;
+                  default: return EBlock([e1, e2]);
+                }
+              }
+              var catchAll = null;
+              var catchAllExpr = NULL.p();
+              var expr = catchAllExpr;
+              for(cat in catches){
+                switch(cat.type){
+                  case TPath({name:'Dynamic', pack:[]}):
+                    catchAllExpr.expr = block(singleVar(cat.name, macro __err).p(), cat.expr);
+                  case TPath(path):
+                    var type = null;
+                    var fullPath = path.pack.copy();
+                    fullPath.push(path.name);
+                    for(part in fullPath){
+                      type = (type == null) ? EConst(CIdent(part)).p() : EField(type, part).p();
+                    }
+                    var catExpr = block(EVars([{name:cat.name, type:cat.type, expr:EConst(CIdent('__err')).p()}]).p(), cat.expr).p();
+                    expr = macro 
+                      if(Std.is(__err, $type)) $catExpr;
+                      else $expr;
+                  default: throw 'unknown type in catch';
+                }
+              }
+              lines.push(EFunction(afterTryN, {
+                args: [{name:'__stackErr', type:ASYNC_ERROR, opt:false}],
+                expr: macro
+                  if(__stackErr != null){
+                    var __err = __stackErr.msg;
+                    $expr;
+                  }
+                  else $afterCatchI(null),
+                ret: null,
+                params: [],
+              }).p());
+            }
+            else{
+              lines.push(EFunction(afterTryN, {
+                args: [{name:ERROR_NAME, type:null, opt:false}],
+                expr: EIf(
+                  EBinop(OpNotEq, ERROR.p(), NULL.p()).p(),
+                  ETry( EThrow(ERROR.p()).p(), catches ).p(),
+                  ECall(afterCatchI, [NULL.p()]).p()
+                ).p(),
+                ret: null,
+                params: [],
+              }).p());
+            }
+
+            if(flow.open) flow.lines.push(afterTryI.call([NULL.p()]).p());
             for(nline in flow.root) lines.push(nline);
           }
           else{
@@ -654,7 +767,7 @@ class Flow{
   static function haveCatchAll(catches:Array<Catch>){
     for(cat in catches){
       switch(cat.type){
-        case TPath({name:Dynamic, pack:[]}):
+        case TPath({name:'Dynamic', pack:[]}): return true;
         default:
       }
     }

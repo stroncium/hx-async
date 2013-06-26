@@ -2,22 +2,22 @@ package async;
 
 import haxe.PosInfos;
 
-class AsyncError<T>{
-  public static function mk(err:Dynamic, ?pos:PosInfos){
-    var ret;
-    if(Std.is(err, AsyncError)){
-      ret = err;
+class AsyncError{
+  public static function mk(from:Dynamic, ?pos:PosInfos):AsyncError{
+    var ret:AsyncError;
+    if(Std.is(from, AsyncError)){
+      ret = from;
       ret.addStack(pos);
     }
     else{
-      ret = new AsyncError(err, pos);
+      ret = new AsyncError(from, pos);
     }
     return ret;
   }
 
   public var stack:Array<PosInfos>;
-  public var msg(default, null):T;
-  public function new(msg:T, ?pos:PosInfos){
+  public var msg(default, null):Dynamic;
+  public function new(msg:Dynamic, ?pos:PosInfos){
     this.msg = msg;
     this.stack = [pos];
   }

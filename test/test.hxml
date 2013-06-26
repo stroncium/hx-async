@@ -2,5 +2,5 @@
 -cp ../
 -js test.js
 #--dce full
--D async_readable
--D async_stack
+-D async-readable
+-D async-stack

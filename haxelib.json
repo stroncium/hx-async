@@ -1,0 +1,11 @@
+{
+  "name": "async",
+  "url" : "https://github.com/stroncium/hx-async",
+  "license": "MIT",
+  "tags": ["cross", "macro", "async"],
+  "description": "Asynchronous programming made easy.",
+  "version": "0.3.0",
+  "releasenote": "Updated for haxe 3. Still some changes ahead.",
+  "contributors": ["stroncium"],
+  "dependencies": {}
+}
