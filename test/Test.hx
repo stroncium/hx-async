@@ -4,7 +4,6 @@ import haxe.PosInfos;
 import haxe.CallStack;
 
 class Test implements async.Build{
-
   @:async(None) static function test1(){
     trace(' === TEST 1 === ');
     [] = Async.block({ [] = delay(100); })(); // creepy, I know, just a test
@@ -42,7 +41,7 @@ class Test implements async.Build{
     //other errors would have gone to callback
   }
 
-  @async @asyncDump static function test5(){
+  @async static function test5(){
     trace(' === TEST 5 === ');
     try{
       [] = throwAsyncErrorIfTrue(false, 'error 1');
@@ -118,6 +117,18 @@ class Test implements async.Build{
     }
   }
 
+  @async static function test10(){
+    try{
+      throw 'lol';
+    }
+    catch(e:String){
+      return many(2,1);
+    }
+    catch(e:Dynamic){
+      return many(1,2);
+    }
+  }
+
   @async static function testsFinished(){
     trace(' === TESTS FINISHED === ');
   }
@@ -132,6 +143,7 @@ class Test implements async.Build{
     [] = test7();
     [] = test8();
     [] = test9();
+    [_,_] = test10();
     [] = testsFinished();
   }
 
@@ -170,7 +182,7 @@ class Test implements async.Build{
   public static function main(){
     asynchronous(10, 'string', function(err){
       if(err != null){
-        trace('Error: '+err);
+        trace('TEST ERROR: '+err);
       }
     });
   }

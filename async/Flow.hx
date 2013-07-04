@@ -200,21 +200,45 @@ class Flow{
 
     var cbIdent = cbName.ident().pos(e.pos);
     var returnsLength = 0;
+    var retDefined = null;
     if(returns != null) returnsLength = returns.length;
     else{
       for(ret in flow.repsReturn){
         switch(ret.expr){
           case EReturn(e):
-            returnsLength = if(e == null) 0;
-            else switch(e){
+            returnsLength = switch(e){
+              case _ if(e == null): 0;
               case {expr:ECall({expr:EConst(CIdent('many'))}, args)}: args.length;
               case _: 1;
             }
+            retDefined = ret;
             break;
           default: trace('shouldnt happen');
         }
       }
     }
+    var defined = retDefined == null ? 'signature' : Std.string(retDefined.pos);
+    var instead = '$returnsLength argument${returnsLength == 1 ? "" : "s"} as defined at $defined';
+    for(ret in flow.repsReturn){
+      switch(ret.expr){
+        case EReturn(e):
+          var rets = switch(e){
+            case _ if (e == null): 0;
+            case {expr:ECall({expr:EConst(CIdent('many'))}, args)}: args.length;
+            case _: 1;
+          };
+          if(rets != returnsLength){
+            if(Reflect.field(ret, 'autoAdded')){
+              Context.error('Missing return in function returning $instead', ret.pos);
+            }
+            else{
+              Context.error('Returns $rets instead of $instead', ret.pos);
+            }
+          }
+        default: trace('shouldnt happen');
+      }
+    }
+
     var localNull = NULL.pos(e.pos), localZero = ZERO.pos(e.pos), localFalse = FALSE.pos(e.pos);
     for(ret in flow.repsReturn){
       switch(ret.expr){
@@ -227,7 +251,7 @@ class Flow{
             };
           args.unshift(localNull);
           ret.expr = cbIdent.call(args);
-        default: throw 'shouldnt happen, not a return: '+ret;
+        default: throw 'shouldnt happen, not a return: '+ret.toString();
       }
     }
     var ref;
@@ -267,7 +291,8 @@ class Flow{
   inline function finalize(?call){
     if(open){
       if(call == null){
-        var expr = EReturn(null).p();
+        var expr = {expr:EReturn(null), pos:Macro.getPos()};
+        Reflect.setField(expr, 'autoAdded', true);
         repsReturn.push(expr);
         lines.push(EReturn(expr).p());
       }
@@ -471,6 +496,7 @@ class Flow{
           repsReturn.push(line);
           open = false;
           run = false;
+          async = true;
           break;
         }
         case EFor(iter, expr):{
@@ -647,29 +673,42 @@ class Flow{
           }
         }
         case ETry(expr, catches):{
-          var afterTryN = gen('afterTry'), afterCatchN = gen('afterCatch');
-          var afterTryI = afterTryN.ident().p(), afterCatchI = afterCatchN.ident().p();
+          var catchN = gen('doCatch'), afterN = gen('afterTryCatch');
+          var catchI = catchN.ident().p(), afterI = afterN.ident().p();
           var flow = mkTry(expr);
           async = true;
 
           var newLines = [];
           var err = ERROR.p();
-          lines.push(makeErrorFun(afterCatchN, newLines, ebCall(err)));
+          var afterPos = lines.length;
+          lines.push(null);
           if(!haveCatchAll(catches)){
-            var err = ERROR.p();
-            catches.push({name:ERROR_NAME, type:DYNAMIC, expr: macro throw $err});
+            catches.push({name:ERROR_NAME, type:DYNAMIC, expr:EThrow(ERROR.p()).p()});
           }
 
+          var haveOpenCatch = false;
           for(cat in catches){
             var cflow = mkFlow(cat.expr);
-            cflow.finalize(afterCatchI.call([NULL.p()]).p());
+            // trace('${cflow.open ? "OPEN" : "CLOSED"}: '+cat.expr.toString());
+            if(cflow.open){
+              haveOpenCatch = true;
+              cflow.lines.push(afterI.call([NULL.p()]).p());
+            }
             cat.expr = cflow.getExpr();
           }
+          // trace('flow.async = ${flow.async}');
           if(flow.async){
-            for(thr in flow.repsThrow) switch(thr.expr){
-              case EThrow(e): thr.expr = ECall(afterTryI, [stackIt(e)]);
-              default: throw 'shouldn\'t happen';
+            // for(thr in flow.repsThrow) switch(thr.expr){
+            //   case EThrow(e): thr.expr = ECall(catchI, [stackIt(e)]);
+            //   default: throw 'shouldn\'t happen';
+            // }
+            // trace('${flow.open ? "OPEN" : "CLOSED"}: '+expr.toString());
+            for(rep in flow.repsThrow) switch(rep.expr){
+              case EThrow(v): rep.expr = ECall(catchI, [v]);
+              default: throw "shouldn't happen";
             }
+
+            // repsThrow = repsThrow.concat(flow.repsThrow);
             if(STACK){
               function block(e1:Expr, e2:Expr):ExprDef{
                 switch(e2.expr){
@@ -698,38 +737,55 @@ class Flow{
                   default: throw 'unknown type in catch';
                 }
               }
-              lines.push(EFunction(afterTryN, {
+              lines.push(EFunction(catchN, {
                 args: [{name:'__stackErr', type:ASYNC_ERROR, opt:false}],
                 expr: macro
                   if(__stackErr != null){
                     var __err = __stackErr.msg;
                     $expr;
                   }
-                  else $afterCatchI(null),
+                  else $afterI(null),
                 ret: null,
                 params: [],
               }).p());
             }
             else{
-              lines.push(EFunction(afterTryN, {
+              lines.push(EFunction(catchN, {
                 args: [{name:ERROR_NAME, type:null, opt:false}],
                 expr: EIf(
                   EBinop(OpNotEq, ERROR.p(), NULL.p()).p(),
                   ETry( EThrow(ERROR.p()).p(), catches ).p(),
-                  ECall(afterCatchI, [NULL.p()]).p()
+                  ECall(afterI, [NULL.p()]).p()
                 ).p(),
                 ret: null,
                 params: [],
               }).p());
             }
 
-            if(flow.open) flow.lines.push(afterTryI.call([NULL.p()]).p());
-            for(nline in flow.root) lines.push(nline);
+            if(flow.open){
+              flow.lines.push(afterI.call([NULL.p()]).p());
+            }
+            for(l in flow.root) lines.push(l);
+            // lines = lines.concat(flow.root);
+            if(!(flow.open || flow.async) && !haveOpenCatch) open = false;
           }
           else{
-            lines.push(ETry(flow.getExpr(), catches).p());
+            if(!flow.open && !haveOpenCatch) open = false;
+            lines.push(ETry(expr, catches).p());
+            // lines.push(ETry(flow.getExpr(), catches).p());
           }
-          jumpIn(newLines);
+          if(open){
+            lines[afterPos] = makeErrorFun(afterN, newLines, ebCall(err));
+            jumpIn(newLines);
+          }
+          else{
+            lines.splice(afterPos, 1);
+            open = false;
+            run = false;
+            jumpIn(newLines);
+            break;
+          }
+
         }
         default: lines.push(line);
       }
