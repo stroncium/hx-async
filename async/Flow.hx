@@ -32,7 +32,7 @@ class Flow{
     READABLE = Context.defined('async_readable');
     PREFIX = READABLE ? '_' : '__';
     ERROR_TYPE = STACK ? ASYNC_ERROR : DYNAMIC;
-    // trace('error: $ERROR_TYPE'); 
+    // trace('error: $ERROR_TYPE');
     return true;
   }
 
@@ -285,7 +285,7 @@ class Flow{
   }
 
   static inline function stackIt(e){
-    return STACK ? ECall(macro async.AsyncError.mk, [e]).pos(e.pos) : e; 
+    return STACK ? ECall(macro async.AsyncError.mk, [e]).pos(e.pos) : e;
   }
 
   inline function finalize(?call){
@@ -731,7 +731,7 @@ class Flow{
                       type = (type == null) ? EConst(CIdent(part)).p() : EField(type, part).p();
                     }
                     var catExpr = block(EVars([{name:cat.name, type:cat.type, expr:EConst(CIdent('__err')).p()}]).p(), cat.expr).p();
-                    expr = macro 
+                    expr = macro
                       if(Std.is(__err, $type)) $catExpr;
                       else $expr;
                   default: throw 'unknown type in catch';
@@ -770,8 +770,11 @@ class Flow{
             if(!(flow.open || flow.async) && !haveOpenCatch) open = false;
           }
           else{
+            if(flow.open){
+              flow.lines.push(afterI.call([NULL.p()]).p());
+            }
             if(!flow.open && !haveOpenCatch) open = false;
-            lines.push(ETry(expr, catches).p());
+            lines.push(ETry(EBlock(flow.root).p(), catches).p());
             // lines.push(ETry(flow.getExpr(), catches).p());
           }
           if(open){
@@ -808,7 +811,7 @@ class Flow{
   }
 
   static inline function makeErrorFun(name:String, lines:Array<Expr>, onError:Expr){
-    return makeFunction(name, [{name:ERROR_NAME, type:null, opt:false}], 
+    return makeFunction(name, [{name:ERROR_NAME, type:null, opt:false}],
       EIf(
         EBinop(OpEq, ERROR.p(), NULL.p()).p(),
         EBlock(lines).p(),
