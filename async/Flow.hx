@@ -16,6 +16,7 @@ private typedef Call = {ids:Array<Arg>, fun:Expr};
 class Flow{
   static var STACK:Bool;
   static var READABLE:Bool;
+  static var SAVE_META:Bool;
   static var PREFIX:String;
   static var ERROR_TYPE;
 
@@ -30,6 +31,7 @@ class Flow{
     ASYNC_ERROR = TPath({name:'AsyncError', pack:['async'], params:[]});
     STACK = Context.defined('async_stack');
     READABLE = Context.defined('async_readable');
+    SAVE_META = Context.defined('async_save_meta');
     PREFIX = READABLE ? '_' : '__';
     ERROR_TYPE = STACK ? ASYNC_ERROR : DYNAMIC;
     // trace('error: $ERROR_TYPE');
@@ -73,16 +75,24 @@ class Flow{
       switch(f.kind){
         case FFun(fun):
           var async = false, params = null, dump = false;
-          for(meta in f.meta){
+          var rmPos = [];
+          for(i in 0...f.meta.length){
+            var meta = f.meta[i];
             switch(meta.name){
               case 'async', ':async':
                 async = true;
                 params = meta.params;
                 meta.params = [];
+                rmPos.push(i);
               case 'asyncDump', ':asyncDump':
+                rmPos.push(i);
                 dump = true;
               default:
             }
+          }
+          if(!SAVE_META){
+            var i = rmPos.length;
+            while(i --> 0) f.meta.splice(rmPos[i], 1);
           }
           if(async){
             convertFunction(fun, params);
@@ -364,11 +374,11 @@ class Flow{
   }
 
   inline function processParallelCalls(expr, calls:Array<Call>){
-    switch(calls.length){
-      case 0:
+    switch(calls){
+      case []:
         warning(expr, 'No parallel calls.');
-      case 1:
-        processAsyncCall(expr, calls[0]);
+      case [call]:
+        processAsyncCall(expr, call);
       default:{
         //TODO check our vars dont overlap with what we use in calls
         var prevPos = Macro.getPos();
@@ -594,12 +604,7 @@ class Flow{
         }
         case EIf(econd, etrue, null):{
           var ftrue = mkFlow(etrue);
-          if(!ftrue.open){
-            var afterIfLines = [];
-            lines.push(EIf(econd, ftrue.getExpr(), EBlock(afterIfLines).p()).p());
-            jumpIn(afterIfLines);
-          }
-          else if(ftrue.async){
+          if(ftrue.async){
             var afterIfN = gen('after'), afterIfI = afterIfN.ident(), afterIfCall = afterIfI.p().call([]).p();
             var afterIfLines = [];
             lines.push(makeNoargFun(afterIfN, EBlock(afterIfLines).p()));
@@ -607,8 +612,13 @@ class Flow{
             lines.push(EIf(econd, ftrue.getExpr(), afterIfCall).p());
             jumpIn(afterIfLines);
           }
-          else{
+          else if(!ftrue.open){
             lines.push(EIf(econd, ftrue.getExpr(), null).p());
+          }
+          else{
+            var afterIfLines = [];
+            lines.push(EIf(econd, ftrue.getExpr(), EBlock(afterIfLines).p()).p());
+            jumpIn(afterIfLines);
           }
         }
         case EIf(econd, etrue, efalse) :{
