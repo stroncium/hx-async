@@ -83,17 +83,15 @@ class Flow{
                 async = true;
                 params = meta.params;
                 meta.params = [];
-                rmPos.push(i);
+                if(!SAVE_META) rmPos.push(i);
               case 'asyncDump', ':asyncDump':
                 rmPos.push(i);
                 dump = true;
               default:
             }
           }
-          if(!SAVE_META){
-            var i = rmPos.length;
-            while(i --> 0) f.meta.splice(rmPos[i], 1);
-          }
+          var i = rmPos.length;
+          while(i --> 0) f.meta.splice(rmPos[i], 1);
           if(async){
             convertFunction(fun, params);
             if(dump){
@@ -407,7 +405,7 @@ class Flow{
               }
               else{
                 idsUsed.set(name, true);
-                vars.push({name:name, expr:NULL.p(), type:null});
+                vars.push({name:name, expr:NULL.p(), type:id.type});
               }
             }
           }
