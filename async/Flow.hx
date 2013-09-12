@@ -611,8 +611,6 @@ class Flow{
             jumpIn(afterIfLines);
           }
           else{
-          }
-          if(ftrue.async){
             lines.push(EIf(econd, ftrue.getExpr(), null).p());
           }
         }
