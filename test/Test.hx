@@ -4,22 +4,22 @@ import haxe.PosInfos;
 import haxe.CallStack;
 
 class Test implements async.Build{
-  @:async(None) static function test1(){
-    trace(' === TEST 1 === ');
+  @:async(None) @asyncDump static function test1(){
+    trace(' === TEST 1 === basic');
     [] = Async.block({ [] = delay(100); })(); // creepy, I know, just a test
     [var a:String, var b:String] = asyncGet2('string', 'another string');
-    [var c:Int] = asyncGet(null);
+    [var c] = asyncGet(null);
     trace('got $a, $b and $c');
   }
 
   @async static function test2(){
-    trace(' === TEST 2 === ');
+    trace(' === TEST 2 === while');
     var i = 3;
     while(i --> 0) [] = delay(10);
   }
 
   @async(var a:Map<String, String>) static function test3(){
-    trace(' === TEST 3 === ');
+    trace(' === TEST 3 === direct assign');
     var a = [null, null];
     [a[0]] = asyncGet('string'); //direct assign
     [a[1]] = asyncGet('string'); //direct assign
@@ -28,7 +28,7 @@ class Test implements async.Build{
   }
 
   @async static function test4(){
-    trace(' === TEST 4 === ');
+    trace(' === TEST 4 === throw-catch');
     try{
       syncThrow(); // synchronous as hell
     }
@@ -42,7 +42,7 @@ class Test implements async.Build{
   }
 
   @async static function test5(){
-    trace(' === TEST 5 === ');
+    trace(' === TEST 5 === complex throw-catch');
     try{
       [] = throwAsyncErrorIfTrue(false, 'error 1');
       [] = throwAsyncErrorIfTrue(true, 'error 2');
@@ -56,22 +56,22 @@ class Test implements async.Build{
     }
   }
 
-  @async static function test6(){
-    trace(' === TEST 6 === ');
-    [ // direct assigns in parallel are not supported yet
-      var v1 = asyncGet('string'),
-      var v2 = {
+  @async @asyncDump static function test6(){
+    trace(' === TEST 6 === parallel');
+    [
+      [var v1] = asyncGet('string'),
+      [var v2] = {
         [var v] = asyncGet('string');
         [] = delay(200);
         return 'another '+v;
       },
-      delay(100),
+      [] = delay(100),
     ];
     trace('we have $v1 and $v2, at least 100 ms passed');
   }
 
   @async static function test7(){
-    trace(' === TEST 7 === ');
+    trace(' === TEST 7 === for+switch');
     for(i in 0...10){
       trace('it\'s '+i);
       switch(i){
@@ -90,7 +90,7 @@ class Test implements async.Build{
   }
 
   @async static function test8(){
-    trace(' === TEST 8 === ');
+    trace(' === TEST 8 === return many');
     [var num, var str] = Async.block({
       if(Math.random() < 2){
         return many(222, 'another string');
@@ -101,7 +101,7 @@ class Test implements async.Build{
   }
 
   @async static function test9(){
-    trace(' === TEST 9 === ');
+    trace(' === TEST 9 === if+return');
     var t = true, f = false;
     if(f){
       trace('shouldn\'t happen');
@@ -118,6 +118,7 @@ class Test implements async.Build{
   }
 
   @async static function test10(){
+    trace(' === TEST 10 === try-catch+return many');
     try{
       throw 'lol';
     }

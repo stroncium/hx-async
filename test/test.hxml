@@ -3,4 +3,4 @@
 -js test.js
 #--dce full
 -D async-readable
--D async-stack
+#-D async-stack
