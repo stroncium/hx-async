@@ -34,7 +34,6 @@ class Flow{
     SAVE_META = Context.defined('async_save_meta');
     PREFIX = READABLE ? '_' : '__';
     ERROR_TYPE = STACK ? ASYNC_ERROR : DYNAMIC;
-    // trace('error: $ERROR_TYPE');
     return true;
   }
 
@@ -81,8 +80,8 @@ class Flow{
             switch(meta.name){
               case 'async', ':async':
                 async = true;
-                params = meta.params;
-                meta.params = [];
+                //params = meta.params;
+                //meta.params = [];
                 if(!SAVE_META) rmPos.push(i);
               case 'asyncDump', ':asyncDump':
                 rmPos.push(i);
@@ -93,7 +92,7 @@ class Flow{
           var i = rmPos.length;
           while(i --> 0) f.meta.splice(rmPos[i], 1);
           if(async){
-            convertFunction(fun, params);
+            convertFunction(fun);
             if(dump){
               neko.Lib.println(f.pos+':');
               neko.Lib.println(haxe.macro.ExprTools.toString({expr:EFunction(f.name, fun), pos:f.pos}));
@@ -118,30 +117,30 @@ class Flow{
   }
 
   static inline var CB_NAME = '__cb';
-  public static function convertFunction(fun:Function, ?params:Array<Expr>){
-    var cbType = null, returns = null;
-    if(params != null && params.length == 1){
-      switch(params[0].expr){
-        case EVars(vars):
-          returns = [];
-          var types = [ERROR_TYPE];
-          for(v in vars){
-            returns.push(v.type);
-            types.push(v.type);
-          }
-          cbType = TFunction(types, VOID);
-        case EConst(CIdent('None')):
-          returns = [];
-          cbType = TFunction([ERROR_TYPE], VOID);
-        default:
-      }
+  public static function convertFunction(fun:Function){
+    var returns = switch(fun.ret){
+      case null: null;
+      case TPath({pack:[],name:'Many',sub:null,params:params}):
+        [for(p in params) switch(p){case TPType(t):t; case _: throw 'expressions not supported';}];
+      case TPath({pack:[],name:'Void'}):
+        [];
+      case t: [t];
     }
+    fun.ret = VOID;
+
     counter = 0;
     var cvt = convertBlock(CB_NAME, returns, fun.expr);
     fun.expr = cvt.expr;
-    if(cbType == null && cvt.args == 0) cbType = TFunction([ERROR_TYPE], VOID);
+    var cbType =
+      if(returns == null){
+        if(cvt.args == 0) TFunction([ERROR_TYPE], VOID);
+        else null;
+      }
+      else{
+        returns.unshift(ERROR_TYPE);
+        TFunction(returns, VOID);
+      }
     fun.args.push({name:CB_NAME, type:cbType, opt:false});
-    fun.ret = VOID;
   }
 
   public static function blockToFunction(e:Expr){
@@ -339,7 +338,7 @@ class Flow{
     }).p();
   }
 
-  inline function processAsyncCall(expr, call:Call){
+  inline function processAsyncCall(call:Call){
     var cbArgs = [{ name: ERROR_NAME, type: null, opt: false, value: null }];
     var newLines = [];
     call.fun.pos.set();
@@ -365,22 +364,23 @@ class Flow{
     }
   }
 
+
   inline function ebCall(arg:Expr){
     var expr = EThrow(arg).p();
     repsThrow.push(expr);
     return expr;
   }
 
-  inline function processParallelCalls(expr, calls:Array<Call>){
+  inline function processParallelCalls(calls:Array<Call>){
     switch(calls){
       case []:
-        warning(expr, 'No parallel calls.');
+        warning(Context.currentPos(), 'No parallel calls.');
       case [call]:
-        processAsyncCall(expr, call);
+        processAsyncCall(call);
       default:{
         //TODO check our vars dont overlap with what we use in calls
         var prevPos = Macro.getPos();
-        expr.pos.set();
+        calls[0].fun.pos.set();
 
         var parallelCounterN = gen('rem_'), afterParallelN = gen('after_');
         var parallelCounterI = parallelCounterN.ident(), afterParallelI = afterParallelN.ident();
@@ -492,13 +492,34 @@ class Flow{
     while(pos < len && run){
       var line = src[pos++];
       line.pos.set();
+      if(line == null) continue;
       switch(line.expr){
+        // case EBinop(OpAssign, left, {expr:EMeta({name:'A', params:[]},right)}):
+        //   async = true;
+        //   var args:Array<Arg> = switch(left.expr){
+        //     case EArrayDecl(elems):
+        //       [for(e in elems) switch(e.expr){
+        //         case EVars([{expr:null, name:name, type:type}]): {expr:EConst(CIdent(name)).p(), direct:false, type:type};
+        //         case _: {expr:e, direct:true}
+        //       }];
+        //     case _: [{expr:left, direct:true}];
+        //   }
+        //   var call = {ids:args, fun:right};
+        //   processAsyncCall(call);
+
+        case EVars([{name:name, type:type, expr:null}]): lines.push(line);
+
+        // case EVars([{name:name, type:type, expr:{expr:EMeta({name:'A', params:[]},right)}}]):
+        //   var arg = {expr:EConst(CIdent(name)).p(), direct:false, type:type};
+        //   var call = {ids:[arg], fun:right};
+        //   processAsyncCall(call);
+
         case EBinop(OpAssign | OpLte, {expr:EArrayDecl(_)}, _):
           async = true;
-          processAsyncCall(line, argToCall(line));
+          processAsyncCall(argToCall(line));
         case EArrayDecl(elems):
           async = true;
-          processParallelCalls(line, argsToCalls(elems));
+          processParallelCalls(argsToCalls(elems));
         case EReturn(_):{
           lines.push(EReturn(line).p());
           repsReturn.push(line);
@@ -642,35 +663,26 @@ class Flow{
           break;
         }
         case ESwitch(e, cases, edef):{
-          var trees = [];
-          for(cas in cases){
-            trees.push(cas.expr);
-          }
+          var trees = [for(c in cases) c.expr];
           if(edef != null) trees.push(edef);
           var asyncs = 0;
 
           var states = [];
           trees.map(function(tree){
             var flow = mkFlow(tree);
-            if(flow.async || flow.closed()) asyncs++;
+            if(flow.async) asyncs++;
             states.push(flow);
           });
-          if(asyncs == 0 && edef != null){
-            lines.push(line);
-          }
+          if(asyncs == 0) lines.push(line);
           else{
             async = true;
             var afterSwitchN = gen('after_');
             var afterSwitchI = afterSwitchN.ident();
             var newLines = [];
             lines.push(makeNoargFun(afterSwitchN, EBlock(newLines).p()));
-            for(flow in states){
-              flow.finalize(afterSwitchI.p().call([]).p());
-            }
+            for(flow in states) if(flow.open) flow.finalize(EReturn(afterSwitchI.p().call([]).p()).p());
             var i = cases.length;
-            while(i --> 0){
-              cases[i].expr = states[i].getExpr();
-            }
+            while(i --> 0) cases[i].expr = states[i].getExpr();
             lines.push(ESwitch(e, cases, edef == null ? afterSwitchI.p().call([]).p() : states[states.length - 1].getExpr()).p());
             lines = newLines;
           }
@@ -692,26 +704,18 @@ class Flow{
           var haveOpenCatch = false;
           for(cat in catches){
             var cflow = mkFlow(cat.expr);
-            // trace('${cflow.open ? "OPEN" : "CLOSED"}: '+cat.expr.toString());
             if(cflow.open){
               haveOpenCatch = true;
               cflow.lines.push(afterI.call([NULL.p()]).p());
             }
             cat.expr = cflow.getExpr();
           }
-          // trace('flow.async = ${flow.async}');
           if(flow.async){
-            // for(thr in flow.repsThrow) switch(thr.expr){
-            //   case EThrow(e): thr.expr = ECall(catchI, [stackIt(e)]);
-            //   default: throw 'shouldn\'t happen';
-            // }
-            // trace('${flow.open ? "OPEN" : "CLOSED"}: '+expr.toString());
             for(rep in flow.repsThrow) switch(rep.expr){
               case EThrow(v): rep.expr = ECall(catchI, [v]);
               default: throw "shouldn't happen";
             }
 
-            // repsThrow = repsThrow.concat(flow.repsThrow);
             if(STACK){
               function block(e1:Expr, e2:Expr):ExprDef{
                 switch(e2.expr){
@@ -796,6 +800,7 @@ class Flow{
         default: lines.push(line);
       }
     }
+
     prevPos.set();
     return this;
   }
@@ -884,8 +889,8 @@ class Flow{
     }
   }
 
-  static inline function warning(expr:Expr, msg = 'Warning (not clarified)'){
-    Context.warning(msg, expr.pos);
+  static inline function warning(pos:Position, msg = 'Warning (not clarified)'){
+    Context.warning(msg, pos);
   }
 
 
