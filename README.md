@@ -15,13 +15,13 @@ We get seemingly synchronous code with special markings and convert it to asynch
 
 ``` haxe
 class Test implements async.Build{
-  @async(var int:Int, string:String, dyn:Dynamic) static function foo(){
+  @async static function foo():Many<Int, String, Dynamic>{
     //returned types are optional
     return many(222, 'string', null);
   }
 
-  @async() delay(ms:Int){
-    //use empty brackets for functions which return nothing(or error)
+  @async delay(ms:Int):Void{
+    //use Void for functions which return nothing(or error)
     //...
     return;
   }
@@ -29,13 +29,13 @@ class Test implements async.Build{
   @async static function bar(){
     //when there
     var b;
-    [var a:Int, b, _] = foo(); //getting multiple values
+    [var a:Int, b, _] = foo(); //getting multiple values, using _ to ignore some of them
     [] = delay(100); //just waiting for callback
     trace(a);
     [
-      [var c, var d] = foo(),
+      [var c, var d, _] = foo(),
       delay(200),
-    ]; // this will be ran in parallel
+    ]; // this call will be ran in parallel, so the trace will be executed at the moment both return(call back)
     trace(c, d);
   }
 }
@@ -45,10 +45,6 @@ class Test implements async.Build{
 
   + Every class implementing `async.Build` interface will be automatically processed.
   + Every function of such class with `@async` meta will be converted.
-
-  Use `@async(var foo:Foo, bar, bas:Bas)` to explicitly type callback.
-  Use `@async(None)` to explicitly type callback as returning nothing(or error). ( We can't distinguish between @async and @async() at the moment. )
-
   + write `[<returns>] = call(<args>)` to call asynchronous function
 
   `[a, var b, var c:Int] = call(1, 2, 3); <other code>` is converted to something like
@@ -86,6 +82,8 @@ call(1, 2, 3, function(err, _a, b, c:Int){
       - all the asynchronous function it uses always call their callbacks, do it only once and never *throw* (synchronous) errors.
       - there is no implicit calls to callback
 
+  + Mode which will enrich errors with stacktrace-like information entroduced, but requires a bit more of work.
+
   + Other
 
     Use `-D async_readable` compilation flag to make async code more readable.
@@ -97,6 +95,5 @@ call(1, 2, 3, function(err, _a, b, c:Int){
 ## TODOs
   + We can allow optional arguments by setting callback as first argument(it isn't usable in pure code, but we dont care about this in generated code).
   + Source mapping may be a bit broken in some cases.
-  + We can introduce a mode which will enrich errors with stacktrace-like information.
   + Some code can be simplified, amount of calls reduced (functions which just check error and call next function which will also check for same errors).
 
