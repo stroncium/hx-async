@@ -119,7 +119,7 @@ class Flow{
   static inline var CB_NAME = '__cb';
   public static function convertFunction(fun:Function){
     var returns = switch(fun.ret){
-      case null: null;
+      case r if (r == null): null;
       case TPath({pack:[],name:'Many',sub:null,params:params}):
         [for(p in params) switch(p){case TPType(t):t; case _: throw 'expressions not supported';}];
       case TPath({pack:[],name:'Void'}):
