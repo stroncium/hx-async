@@ -4,8 +4,8 @@
   "license": "MIT",
   "tags": ["cross", "macro", "async"],
   "description": "Asynchronous programming made easy.",
-  "version": "0.3.0",
-  "releasenote": "Updated for haxe 3. Still some changes ahead.",
+  "version": "0.4.0",
+  "releasenote": "Changed return declaration style, bugfixes, stacktrace introduced.",
   "contributors": ["stroncium"],
   "dependencies": {}
 }
