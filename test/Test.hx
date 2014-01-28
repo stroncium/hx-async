@@ -4,7 +4,7 @@ import haxe.PosInfos;
 import haxe.CallStack;
 
 class Test implements async.Build{
-  @:async(None) @asyncDump static function test1(){
+  @async static function test1(){
     trace(' === TEST 1 === basic');
     [] = Async.block({ [] = delay(100); })(); // creepy, I know, just a test
     [var a:String, var b:String] = asyncGet2('string', 'another string');
@@ -12,13 +12,16 @@ class Test implements async.Build{
     trace('got $a, $b and $c');
   }
 
-  @async static function test2(){
+  @async @asyncDump static function test2(){
     trace(' === TEST 2 === while');
     var i = 3;
     while(i --> 0) [] = delay(10);
+
+    var i = 3;
+    do{ [] = delay(10); } while (i --> 0);
   }
 
-  @async(var a:Map<String, String>) static function test3(){
+  @async static function test3():Map<String, String>{
     trace(' === TEST 3 === direct assign');
     var a = [null, null];
     [a[0]] = asyncGet('string'); //direct assign
@@ -56,7 +59,7 @@ class Test implements async.Build{
     }
   }
 
-  @async @asyncDump static function test6(){
+  @async static function test6(){
     trace(' === TEST 6 === parallel');
     [
       [var v1] = asyncGet('string'),

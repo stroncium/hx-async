@@ -585,6 +585,7 @@ class Flow{
 
             var loopDefinition;
             if(normal){
+              if(flow.open) flow.lines.push(loopCall.p());
               loopDefinition = makeNoargFun(loopN, EIf(
                 econd,
                 EBlock(flow.root).p(),
@@ -592,18 +593,19 @@ class Flow{
               ).p());
             }
             else{
-              flow.root.push(EIf(
-                econd,
-                loopCall.p(),
-                afterLoopCall.p()
-              ).p());
+              if(flow.open){
+                flow.lines.push(EIf(
+                  econd,
+                  loopCall.p(),
+                  afterLoopCall.p()
+                ).p());
+              }
               loopDefinition = makeNoargFun(loopN, EBlock(flow.root).p());
             }
 
             lines.push(afterLoopDefinition);
             lines.push(loopDefinition);
             lines.push(loopCall.p());
-            if(flow.open) flow.lines.push(loopCall.p());
             jumpIn(afterLoopLines);
           }
         }
