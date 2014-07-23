@@ -97,3 +97,4 @@ call(1, 2, 3, function(err, _a, b, c:Int){
   + Source mapping may be a bit broken in some cases.
   + Some code can be simplified, amount of calls reduced (functions which just check error and call next function which will also check for same errors).
 
+by [Yanis Benson](plus.google.com/+YanisBenson?rel=author)
