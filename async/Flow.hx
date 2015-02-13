@@ -69,7 +69,9 @@ class Flow{
   static var savedErrors:Array<Error> = [];
 
   public static function buildClass(){
+    //trace('Async processing ${Context.getLocalClass()}');
     var buildFields = Context.getBuildFields();
+    var pos = Context.currentPos();
     for(f in buildFields){
       switch(f.kind){
         case FFun(fun):
@@ -78,11 +80,14 @@ class Flow{
           for(i in 0...f.meta.length){
             var meta = f.meta[i];
             switch(meta.name){
-              case 'async', ':async':
+              case ':async': async = true;
+              case 'async':
                 async = true;
                 //params = meta.params;
                 //meta.params = [];
-                if(!SAVE_META) rmPos.push(i);
+                if(!SAVE_META){
+                  rmPos.push(i);
+                }
               case 'asyncDump', ':asyncDump':
                 rmPos.push(i);
                 dump = true;
@@ -90,7 +95,7 @@ class Flow{
             }
           }
           var i = rmPos.length;
-          while(i --> 0) f.meta.splice(rmPos[i], 1);
+          f.meta.push({name:':isAsync', pos:pos});
           if(async){
             convertFunction(fun);
             if(dump){
@@ -117,7 +122,7 @@ class Flow{
   }
 
   static inline var CB_NAME = '__cb';
-  public static function convertFunction(fun:Function){
+  public static function convertFunction(fun:Function, ?canBeEmpty = true){
     var returns = switch(fun.ret){
       case r if (r == null): null;
       case TPath({pack:[],name:'Many',sub:null,params:params}):
@@ -127,19 +132,23 @@ class Flow{
       case t: [t];
     }
     fun.ret = VOID;
+    var cbType = null;
 
     counter = 0;
-    var cvt = convertBlock(CB_NAME, returns, fun.expr);
-    fun.expr = cvt.expr;
-    var cbType =
-      if(returns == null){
-        if(cvt.args == 0) TFunction([ERROR_TYPE], VOID);
-        else null;
-      }
-      else{
-        returns.unshift(ERROR_TYPE);
-        TFunction(returns, VOID);
-      }
+    if(fun.expr != null){
+      var cvt =  convertBlock(CB_NAME, returns, fun.expr);
+      fun.expr = cvt.expr;
+      if(returns == null && cvt.args == 0) cbType = TFunction([ERROR_TYPE], VOID);
+    }
+    else{
+      if(!canBeEmpty) throw 'empty function';
+      if(returns == null) throw 'Async return type should be defined for functions without body.';
+    }
+    if(cbType == null && returns != null){
+      returns.unshift(ERROR_TYPE);
+      cbType = TFunction(returns, VOID);
+    }
+
     fun.args.push({name:CB_NAME, type:cbType, opt:false});
   }
 
@@ -540,7 +549,7 @@ class Flow{
             var loopCall = loopI.p().call([]);
             var afterLoopCall = afterLoopI.p().call([]);
             for(bre in flow.repsBreak) bre.expr = afterLoopCall;
-            for(con in flow.repsContinue) con.expr = loopCall;
+            for(con in flow.repsContinue) con.expr = EReturn(loopCall.p());
 
             var it, id;
             switch(iter.expr){
@@ -581,7 +590,7 @@ class Flow{
             var afterLoopCall = afterLoopI.p().call([]);
             var afterLoopDefinition = makeNoargFun(afterLoopN, EBlock(afterLoopLines).p());
             for(bre in flow.repsBreak) bre.expr = afterLoopCall;
-            for(con in flow.repsContinue) con.expr = loopCall;
+            for(con in flow.repsContinue) con.expr = EReturn(loopCall.p());
 
             var loopDefinition;
             if(normal){
@@ -665,7 +674,19 @@ class Flow{
           break;
         }
         case ESwitch(e, cases, edef):{
-          var trees = [for(c in cases) c.expr];
+          var trees = [];
+          var noDef = edef == null;
+          for(c in cases){
+            trees.push(c.expr);
+            if(noDef && c.guard == null){
+              for(v in c.values){
+                switch(v.expr){
+                  case EConst(CIdent('_')): noDef = false;
+                  case _:
+                }
+              }
+            }
+          }
           if(edef != null) trees.push(edef);
           var asyncs = 0;
 
@@ -725,7 +746,9 @@ class Flow{
                   default: return EBlock([e1, e2]);
                 }
               }
-              var catchAll = null;
+              if(!haveOpenCatch && !flow.open) open = false;
+
+              // var catchAll = null;
               var catchAllExpr = NULL.p();
               var expr = catchAllExpr;
               for(cat in catches){
@@ -749,11 +772,15 @@ class Flow{
               lines.push(EFunction(catchN, {
                 args: [{name:'__stackErr', type:ASYNC_ERROR, opt:false}],
                 expr: macro
-                  if(__stackErr != null){
-                    var __err = __stackErr.msg;
+                  {
+                    var __err = __stackErr.msg == null ? __stackErr : __stackErr.msg;
                     $expr;
-                  }
-                  else $afterI(null),
+                  },
+                  // if(__stackErr != null){
+                  //   var __err = __stackErr.msg == null ? __stackErr : __stackErr.msg;
+                  //   $expr;
+                  // }
+                  // else $afterI(null),
                 ret: null,
                 params: [],
               }).p());
@@ -771,12 +798,9 @@ class Flow{
               }).p());
             }
 
-            if(flow.open){
-              flow.lines.push(afterI.call([NULL.p()]).p());
-            }
+            if(flow.open) flow.lines.push(afterI.call([NULL.p()]).p());
             for(l in flow.root) lines.push(l);
             // lines = lines.concat(flow.root);
-            if(!(flow.open || flow.async) && !haveOpenCatch) open = false;
           }
           else{
             if(flow.open){
@@ -792,7 +816,6 @@ class Flow{
           }
           else{
             lines.splice(afterPos, 1);
-            open = false;
             run = false;
             jumpIn(newLines);
             break;

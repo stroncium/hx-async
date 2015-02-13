@@ -34,6 +34,9 @@ class AsyncError{
     return str;
   }
 
-
-
+  #if async_stack
+    public static inline function extract(err:Dynamic) return Std.is(err, AsyncError) ? err.msg : err;
+  #else
+    public static inline function extract<T>(err:T):T return err;
+  #end
 }
