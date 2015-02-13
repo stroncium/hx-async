@@ -279,7 +279,7 @@ class Flow{
       switch(thr.expr){
         case EThrow(e):
           var args = ref.copy();
-          args[0] = stackIt(e);
+          args[0] = ECheckType(stackIt(e), DYNAMIC).p();
           thr.expr = cbIdent.call(args);
         case _: trace('shouldn\'t happen: ${thr.pos} ${thr.toString()}');
       }
@@ -714,7 +714,7 @@ class Flow{
           }
           if(flow.async){
             for(rep in flow.repsThrow) switch(rep.expr){
-              case EThrow(v): rep.expr = ECall(catchI, [v]);
+              case EThrow(v): rep.expr = ECall(catchI, [ECheckType(v, DYNAMIC).p()]);
               default: throw "shouldn't happen";
             }
 
