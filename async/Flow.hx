@@ -773,7 +773,7 @@ class Flow{
                 args: [{name:'__stackErr', type:ASYNC_ERROR, opt:false}],
                 expr: macro
                   {
-                    var __err = __stackErr.msg == null ? __stackErr : __stackErr.msg;
+                    var __err:Dynamic = __stackErr.msg == null ? __stackErr : __stackErr.msg;
                     $expr;
                   },
                   // if(__stackErr != null){
