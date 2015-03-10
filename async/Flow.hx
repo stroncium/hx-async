@@ -619,6 +619,9 @@ class Flow{
           }
         }
         case EBreak:{
+          if(repsContinue == null){ //means we are out of loop
+            Context.error('Break outside loop', line.pos);
+          }
           repsBreak.push(line);
           lines.push(line);
           open = false;
@@ -626,6 +629,9 @@ class Flow{
           break;
         }
         case EContinue:{
+          if(repsContinue == null){ //means we are out of loop
+            Context.error('Continue outside loop', line.pos);
+          }
           repsContinue.push(line);
           lines.push(line);
           open = false;
