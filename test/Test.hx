@@ -6,19 +6,19 @@ import haxe.CallStack;
 class Test implements async.Build{
   @async static function test1(){
     trace(' === TEST 1 === basic');
-    [] = Async.block({ [] = delay(100); })(); // creepy, I know, just a test
+    @await Async.block({ [] = delay(100); })(); // creepy, I know, just a test
     [var a:String, var b:String] = asyncGet2('string', 'another string');
-    [var c] = asyncGet(null);
+    var c = @await asyncGet(null);
     trace('got $a, $b and $c');
   }
 
   @async @asyncDump static function test2(){
     trace(' === TEST 2 === while');
     var i = 3;
-    while(i --> 0) [] = delay(10);
+    while(i --> 0) @await delay(10);
 
     var i = 3;
-    do{ [] = delay(10); } while (i --> 0);
+    do{ @await delay(10); } while (i --> 0);
   }
 
   @async static function test3():Map<String, String>{
@@ -38,7 +38,7 @@ class Test implements async.Build{
     catch(e:String){
       trace('got error: $e');
       trace('thinking...');
-      [] = delay(100);
+      @await delay(100);
       trace('realized we dont care about this error');
     }
     //other errors would have gone to callback
@@ -47,8 +47,8 @@ class Test implements async.Build{
   @async static function test5(){
     trace(' === TEST 5 === complex throw-catch');
     try{
-      [] = throwAsyncErrorIfTrue(false, 'error 1');
-      [] = throwAsyncErrorIfTrue(true, 'error 2');
+      @await throwAsyncErrorIfTrue(false, 'error 1');
+      @await throwAsyncErrorIfTrue(true, 'error 2');
     }
     catch(e:String){
       trace('error: $e');
@@ -59,12 +59,12 @@ class Test implements async.Build{
     }
   }
 
-  @async static function test6(){
+  @async @asyncDump static function test6(){
     trace(' === TEST 6 === parallel');
     [
       [var v1] = asyncGet('string'),
       [var v2] = {
-        [var v] = asyncGet('string');
+        var v = @await asyncGet('string');
         [] = delay(200);
         return 'another '+v;
       },
@@ -80,7 +80,7 @@ class Test implements async.Build{
       switch(i){
         case 2:
           trace('2 always takes longer');
-          [] = delay(100);
+          @await delay(100);
         case 3:
           trace('don\'t like number 3');
           continue;
@@ -138,21 +138,21 @@ class Test implements async.Build{
   }
 
   @async static function asynchronous(int:Int, string:String){
-    [] = test1();
-    [] = test2();
-    [_] = test3();
-    [] = test4();
-    [] = test5();
-    [] = test6();
-    [] = test7();
-    [] = test8();
-    [] = test9();
-    [_,_] = test10();
-    [] = testsFinished();
+    @await test1();
+    @await test2();
+    _ = @await test3();
+    @await test4();
+    @await test5();
+    @await test6();
+    @await test7();
+    @await test8();
+    @await test9();
+    [_,_] = @await test10();
+    @await testsFinished();
   }
 
 
-  @async(var ret:T) static function asyncGet<T>(val:T){
+  @:async((ret:T)) static function asyncGet<T>(val:T){
     return val;
   }
 

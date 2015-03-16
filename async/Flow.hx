@@ -492,6 +492,9 @@ class Flow{
     return ea.length == 1 ? ea[0] : EBlock(ea).p();
   }
 
+
+  static inline var AWAIT_META_NAME = 'await';
+
   public function process(isrc:Expr, use_return = true){
     var prevPos = Macro.getPos();
     //FIXME something weird happens there
@@ -503,32 +506,38 @@ class Flow{
       line.pos.set();
       if(line == null) continue;
       switch(line.expr){
-        // case EBinop(OpAssign, left, {expr:EMeta({name:'A', params:[]},right)}):
-        //   async = true;
-        //   var args:Array<Arg> = switch(left.expr){
-        //     case EArrayDecl(elems):
-        //       [for(e in elems) switch(e.expr){
-        //         case EVars([{expr:null, name:name, type:type}]): {expr:EConst(CIdent(name)).p(), direct:false, type:type};
-        //         case _: {expr:e, direct:true}
-        //       }];
-        //     case _: [{expr:left, direct:true}];
-        //   }
-        //   var call = {ids:args, fun:right};
-        //   processAsyncCall(call);
+        case EBinop(OpAssign, left, {expr:EMeta({name:AWAIT_META_NAME, params:[]},right)}):
+          async = true;
+          var args:Array<Arg> = switch(left.expr){
+            case EArrayDecl(elems):
+              [for(e in elems) switch(e.expr){
+                case EVars([{expr:null, name:name, type:type}]): {expr:EConst(CIdent(name)).p(), direct:false, type:type};
+                case _: {expr:e, direct:true}
+              }];
+            case _: [{expr:left, direct:true}];
+          }
+          var call = {ids:args, fun:right};
+          processAsyncCall(call);
+
+        case EMeta({name:AWAIT_META_NAME, params:[]},fun):
+          async = true;
+          processAsyncCall({ids:[], fun:fun});
 
         case EVars([{name:name, type:type, expr:null}]): lines.push(line);
 
-        // case EVars([{name:name, type:type, expr:{expr:EMeta({name:'A', params:[]},right)}}]):
-        //   var arg = {expr:EConst(CIdent(name)).p(), direct:false, type:type};
-        //   var call = {ids:[arg], fun:right};
-        //   processAsyncCall(call);
+        case EVars([{name:name, type:type, expr:{expr:EMeta({name:AWAIT_META_NAME, params:[]},right)}}]):
+          var arg = {expr:EConst(CIdent(name)).p(), direct:false, type:type};
+          var call = {ids:[arg], fun:right};
+          processAsyncCall(call);
 
         case EBinop(OpAssign | OpLte, {expr:EArrayDecl(_)}, _):
           async = true;
           processAsyncCall(argToCall(line));
+
         case EArrayDecl(elems):
           async = true;
           processParallelCalls(argsToCalls(elems));
+
         case EReturn(_):{
           lines.push(EReturn(line).p());
           repsReturn.push(line);
