@@ -649,7 +649,7 @@ class Flow{
         }
         case EIf(econd, etrue, null):{
           var ftrue = mkFlow(etrue);
-          if(ftrue.open && ftrue.async){
+          if(ftrue.async){
             var afterIfN = gen('after'), afterIfI = afterIfN.ident(), afterIfCall = afterIfI.p().call([]).p();
             var afterIfLines = [];
             lines.push(makeNoargFun(afterIfN, EBlock(afterIfLines).p()));
