@@ -753,7 +753,7 @@ class Flow{
           }
           if(flow.async){
             for(rep in flow.repsThrow) switch(rep.expr){
-              case EThrow(v): rep.expr = ECall(catchI, [ECheckType(v, DYNAMIC).p()]);
+              case EThrow(v): rep.expr = EReturn(ECall(catchI, [ECheckType(v, DYNAMIC).p()]).p());
               default: throw "shouldn't happen";
             }
 
