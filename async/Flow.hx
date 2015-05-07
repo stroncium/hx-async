@@ -808,7 +808,7 @@ class Flow{
                 args: [{name:ERROR_NAME, type:null, opt:false}],
                 expr: EIf(
                   EBinop(OpNotEq, ERROR.p(), NULL.p()).p(),
-                  ETry( EThrow(ERROR.p()).p(), catches ).p(),
+                  ETry( EReturn(EThrow(ERROR.p()).p()).p(), catches ).p(),
                   ECall(afterI, [NULL.p()]).p()
                 ).p(),
                 ret: null,
