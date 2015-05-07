@@ -289,7 +289,7 @@ class Flow{
         case EThrow(e):
           var args = ref.copy();
           args[0] = ECheckType(stackIt(e), DYNAMIC).p();
-          thr.expr = cbIdent.call(args);
+          thr.expr = EReturn(cbIdent.call(args).p());
         case _: trace('shouldn\'t happen: ${thr.pos} ${thr.toString()}');
       }
     }
@@ -338,7 +338,7 @@ class Flow{
 
   inline function makeCbArg(cbArgs, lines){
     var err = ERROR.p(), block = EBlock(lines).p(), ebCallGen = ebCall(err);
-    lines.push(macro if($err != null) return $ebCallGen);
+    lines.push(macro if($err != null) $ebCallGen);
     return EFunction(null, {
       args: cbArgs,
       expr: block,
@@ -435,7 +435,7 @@ class Flow{
             EBinop(OpGte, parallelCounterI.p(), ZERO.p()).p(),
             EBlock([
               EBinop(OpAssign, parallelCounterI.p(), EConst(CInt('-1')).p()).p(),
-              EReturn(ebCall(ERROR.p())).p()
+              ebCall(ERROR.p())
             ]).p(),
             null// EReturn(null).p()
           ).p()
@@ -547,11 +547,14 @@ class Flow{
           break;
         }
         case EFor(iter, expr):{
+          // trace('FOR', iter.toString(), expr.toString());
           var flow = mkLoop(expr);
           if(!flow.async && flow.open){
+            // trace('is not async');
             lines.push(EFor(iter, flow.getExpr()).p());
           }
           else{
+            // trace('is async');
             async = true;
             var loopN = gen('loop'), afterLoopN = gen('afterLoop'), iteratorN = gen('iter');
             var loopI = loopN.ident(), afterLoopI = afterLoopN.ident(), iteratorI = iteratorN.ident();
@@ -656,6 +659,7 @@ class Flow{
             ftrue.lines.push(afterIfCall);
             lines.push(EIf(econd, ftrue.getExpr(), afterIfCall).p());
             jumpIn(afterIfLines);
+            open = async = true;
           }
           else{
             lines.push(EIf(econd, ftrue.getExpr(), null).p());
@@ -683,7 +687,7 @@ class Flow{
         }
         case EThrow(_):{
           repsThrow.push(line);
-          lines.push(EReturn(line).p());
+          lines.push(line);
           open = false;
           run = false;
           break;
@@ -705,11 +709,10 @@ class Flow{
           if(edef != null) trees.push(edef);
           var asyncs = 0;
 
-          var states = [];
-          trees.map(function(tree){
+          var states = trees.map(function(tree){
             var flow = mkFlow(tree);
             if(flow.async) asyncs++;
-            states.push(flow);
+            return flow;
           });
           if(asyncs == 0) lines.push(line);
           else{
