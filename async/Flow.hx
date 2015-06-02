@@ -653,13 +653,14 @@ class Flow{
         case EIf(econd, etrue, null):{
           var ftrue = mkFlow(etrue);
           if(ftrue.async){
-            var afterIfN = gen('after'), afterIfI = afterIfN.ident(), afterIfCall = afterIfI.p().call([]).p();
+            var afterIfN = gen('afterIf'), afterIfI = afterIfN.ident(), afterIfCall = afterIfI.p().call([]).p();
             var afterIfLines = [];
             lines.push(makeNoargFun(afterIfN, EBlock(afterIfLines).p()));
             ftrue.lines.push(afterIfCall);
             lines.push(EIf(econd, ftrue.getExpr(), afterIfCall).p());
             jumpIn(afterIfLines);
-            open = async = true;
+            open = true;
+            async = true;
           }
           else{
             lines.push(EIf(econd, ftrue.getExpr(), null).p());
@@ -668,6 +669,7 @@ class Flow{
         case EIf(econd, etrue, efalse) :{
           var ftrue = mkFlow(etrue);
           var ffalse = mkFlow(efalse);
+          if(ftrue.async || ffalse.async) async = true;
           if(!ftrue.open && !ffalse.open){
             lines.push(EIf(econd, ftrue.getExpr(), ffalse.getExpr()).p());
             run = open = false;
