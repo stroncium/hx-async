@@ -75,7 +75,7 @@ class Flow{
     for(f in buildFields){
       switch(f.kind){
         case FFun(fun):
-          var async = false, params = null, dump = false;
+          var async = false, params = null, dump = false, isAsync = false;
           var rmPos = [];
           for(i in 0...f.meta.length){
             var meta = f.meta[i];
@@ -88,15 +88,17 @@ class Flow{
                 if(!SAVE_META){
                   rmPos.push(i);
                 }
+              case ':isAsync': isAsync = true;
               case 'asyncDump', ':asyncDump':
                 rmPos.push(i);
                 dump = true;
               default:
             }
           }
-          var i = rmPos.length;
-          f.meta.push({name:':isAsync', pos:pos});
+          async = async && !isAsync;
+          // var i = rmPos.length;
           if(async){
+            f.meta.push({name:':isAsync', pos:pos});
             convertFunction(fun);
             if(dump){
               neko.Lib.println(f.pos+':');
